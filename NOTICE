@@ -1,0 +1,48 @@
+NetSO
+Copyright 2026 The NetSO Authors
+
+This product includes software developed by the NetSO Authors and
+contributors. Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+------------------------------------------------------------------------
+Third-party trademarks and vendor images
+------------------------------------------------------------------------
+
+NetSO is an independent, open-source network lab platform. It is NOT
+affiliated with, endorsed by, or sponsored by Cisco, Juniper, Fortinet,
+Arista, Nokia, VyOS, the GNS3 project, EVE-NG, PNET Labs, or any other
+vendor or project.
+
+All product names, logos, trademarks, and registered trademarks are the
+property of their respective owners. Names such as "Cisco", "IOS", "IOL",
+"FortiGate", "Juniper", "GNS3", "EVE-NG", "PNETLab", "Containerlab" and
+"CML" are used only to describe interoperability and compatibility
+(nominative use); their use does not imply any endorsement.
+
+NetSO does NOT include, bundle, distribute, or link to any vendor
+software image, firmware, binary, or license key. Such images are the
+property of their respective vendors and are subject to the vendor's own
+license. To run a given device, the user must independently obtain the
+image and hold a valid license for it. NetSO merely runs images that the
+user already possesses, in the same way as other network emulators.
+
+------------------------------------------------------------------------
+Bundled open-source components
+------------------------------------------------------------------------
+
+The frontend bundles third-party open-source libraries, each under its
+own license, including (non-exhaustive):
+
+  - React                    MIT License
+  - Vite                     MIT License
+  - @xyflow/react            MIT License
+  - @xterm/xterm             MIT License
+  - noVNC                    Mozilla Public License 2.0
+  - guacamole-common-js      Apache License 2.0
+
+The backend uses, among others, FastAPI, Starlette, Pydantic, Uvicorn
+and PyYAML, each under its own permissive open-source license.
+
+Their respective license texts apply to those components and are
+available with each project. This NOTICE file is provided for
+informational purposes only and does not modify the Apache License.

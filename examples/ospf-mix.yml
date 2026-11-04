@@ -1,0 +1,34 @@
+name: ospf-mix
+description: Due router Cisco IOSv + un router FRR + due host Linux su uno switch
+nodes:
+  - name: r1
+    template: cisco-iosv
+    x: 100
+    y: 100
+  - name: r2
+    template: cisco-iosv
+    x: 400
+    y: 100
+  - name: frr1
+    template: frr
+    x: 250
+    y: 300
+  - name: sw1
+    template: bridge
+    x: 250
+    y: 480
+  - name: pc1
+    template: linux-host
+    x: 100
+    y: 620
+  - name: pc2
+    template: linux-host
+    x: 400
+    y: 620
+links:
+  - endpoints: [r1:Gi0/0, r2:Gi0/0]
+  - endpoints: [r1:Gi0/1, frr1:eth1]
+  - endpoints: [r2:Gi0/1, frr1:eth2]
+  - endpoints: [frr1:eth3, sw1:port1]
+  - endpoints: [pc1:eth1, sw1:port2]
+  - endpoints: [pc2:eth1, sw1:port3]

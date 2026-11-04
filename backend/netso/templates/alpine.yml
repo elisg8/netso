@@ -1,0 +1,9 @@
+name: alpine
+title: Linux Alpine
+kind: docker
+description: Container Alpine Linux minimale
+icon: container
+image: alpine:latest
+nics: 4
+console: exec
+cmd: ["sleep", "infinity"]

@@ -1,0 +1,12 @@
+name: frr
+title: FRRouting
+kind: docker
+description: Router FRRouting (OSPF, BGP, IS-IS...). Verifica il tag disponibile prima dell'uso.
+icon: router
+image: quay.io/frrouting/frr:10.2.1
+nics: 8
+console: exec
+config_method: copy
+config_file: /etc/frr/frr.conf
+save_cmd: [vtysh, -c, show running-config]
+ansible_os: frr.frr.frr

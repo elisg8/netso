@@ -1,0 +1,13 @@
+name: juniper-crpd
+title: Juniper cRPD
+kind: docker
+description: Juniper cRPD (container). Immagine e licenza da juniper.net, da caricare con 'docker load'. Da verificare.
+icon: router
+vendor: Juniper
+image: crpd:latest
+nics: 8
+console: exec
+shell: [cli]
+privileged: true
+save_cmd: [cli, -c, show configuration]
+ansible_os: junipernetworks.junos.junos

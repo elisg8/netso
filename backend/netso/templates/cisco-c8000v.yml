@@ -1,0 +1,19 @@
+name: cisco-c8000v
+title: Cisco Catalyst 8000V
+kind: qemu
+description: Cisco Catalyst 8000V. Immagine Cisco, non inclusa.
+icon: router
+image: cisco-c8000v
+cpus: 2
+ram: 4096
+nics: 4
+nic_model: virtio-net-pci
+disk_bus: virtio
+console: telnet
+iface_prefix: Gi
+iface_start: 1
+config_method: iso
+config_file: iosxe_config.txt
+save_cli: [terminal length 0, show running-config]
+save_enable: true
+ansible_os: cisco.ios.ios

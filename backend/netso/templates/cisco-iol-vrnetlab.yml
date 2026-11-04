@@ -1,0 +1,13 @@
+name: cisco-iol-vrnetlab
+title: Cisco IOL Router (vrnetlab)
+kind: docker
+description: Cisco IOL L3 in container vrnetlab (alternativa al nativo) — costruisci tu l'immagine con il tuo IOL (srl-labs/vrnetlab, cisco/iol). Da verificare.
+icon: router
+vendor: Cisco
+image: vrnetlab/cisco_iol:17.12.01
+ram: 512
+nics: 8
+console: exec
+shell: [telnet, 127.0.0.1, "5000"]
+privileged: true
+ansible_os: cisco.ios.ios

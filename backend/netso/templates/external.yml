@@ -1,0 +1,8 @@
+name: external
+title: Rete esterna (bridge host)
+kind: external
+description: Collega il lab a un bridge esistente dell'host (es. br0 verso la rete reale)
+icon: cloud
+nics: 16
+console: none
+host_bridge: br0

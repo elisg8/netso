@@ -1,0 +1,23 @@
+name: arista-ceos
+title: Arista cEOS
+kind: docker
+description: Arista cEOS-lab (container). Immagine da arista.com, da importare con 'docker import' come ceos:latest. Da verificare.
+icon: l3switch
+vendor: Arista
+image: ceos:latest
+ram: 2048
+nics: 8
+console: exec
+shell: [Cli]
+privileged: true
+env:
+  CEOS: "1"
+  EOS_PLATFORM: ceoslab
+  container: docker
+  ETBA: "1"
+  SKIP_ZEROTOUCH_BARRIER_IN_SYSDBINIT: "1"
+  INTFTYPE: eth
+cmd: [/sbin/init, systemd.setenv=INTFTYPE=eth, systemd.setenv=ETBA=1, systemd.setenv=SKIP_ZEROTOUCH_BARRIER_IN_SYSDBINIT=1,
+      systemd.setenv=CEOS=1, systemd.setenv=EOS_PLATFORM=ceoslab, systemd.setenv=container=docker]
+save_cmd: [Cli, -p, "15", -c, show running-config]
+ansible_os: arista.eos.eos

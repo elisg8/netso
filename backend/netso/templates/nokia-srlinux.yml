@@ -1,0 +1,18 @@
+name: nokia-srlinux
+title: Nokia SR Linux
+kind: docker
+description: Nokia SR Linux (container, immagine pubblica ghcr.io). Interfacce e1-1… Da verificare sul server.
+icon: router
+vendor: Nokia
+image: ghcr.io/nokia/srlinux:latest
+nics: 8
+console: exec
+shell: [sr_cli]
+iface_prefix: e1-
+iface_start: 1
+privileged: true
+env:
+  SRLINUX: "1"
+cmd: [sudo, bash, /opt/srlinux/bin/sr_linux]
+save_cmd: [sr_cli, -d, info, flat]
+ansible_os: nokia.srlinux.srlinux

@@ -1,0 +1,18 @@
+name: fortigate
+title: Fortinet FortiGate
+kind: qemu
+description: FortiGate VM (KVM). Immagine Fortinet, non inclusa.
+icon: firewall
+image: fortigate
+cpus: 1
+ram: 2048
+nics: 6
+nic_model: virtio-net-pci
+disk_bus: virtio
+console: telnet
+iface_prefix: port
+iface_start: 1
+config_method: iso
+config_file: openstack/latest/user_data
+config_label: config-2
+ansible_os: fortinet.fortios.fortios

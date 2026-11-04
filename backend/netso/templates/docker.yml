@@ -1,0 +1,8 @@
+name: docker
+title: Docker
+kind: docker
+description: Qualsiasi immagine Docker presente sul server (scegli l'immagine quando aggiungi il nodo).
+icon: docker
+image: alpine:latest
+nics: 4
+console: exec

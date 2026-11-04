@@ -1,0 +1,15 @@
+name: cisco-iol-l2
+title: Cisco IOL Switch L2
+kind: iol
+description: Cisco IOL L2 (switch con VLAN, STP, trunk), eseguito direttamente come in EVE-NG/GNS3 con il tuo file .bin e la tua licenza iourc.
+icon: switch
+vendor: Cisco
+image: iol-l2
+ram: 1024
+nics: 16
+console: telnet
+config_method: nvram
+config_file: startup-config.cfg
+save_cli: [terminal length 0, show running-config]
+save_enable: true
+ansible_os: cisco.ios.ios

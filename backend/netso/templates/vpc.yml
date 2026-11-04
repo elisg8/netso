@@ -1,0 +1,18 @@
+name: vpc
+title: Virtual PC (VPCS)
+kind: docker
+description: PC virtuale leggerissimo stile VPCS (ip, ping, trace, dhcp). Container Alpine.
+icon: host
+image: alpine:latest
+cpus: 1
+ram: 32
+nics: 1
+console: exec
+shell: [sh, /usr/local/bin/vpc]
+assets:
+  /usr/local/bin/vpc: vpc.sh
+cmd: [sh, /usr/local/bin/vpc, --boot]
+config_method: copy
+config_file: /etc/vpc.conf
+privileged: true
+save_cmd: [cat, /run/vpc.state]

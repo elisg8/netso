@@ -1,0 +1,10 @@
+# Lab di soli container: parte subito senza immagini da scaricare a mano
+name: containers-only
+description: Due host Linux collegati direttamente
+nodes:
+  - name: h1
+    template: linux-host
+  - name: h2
+    template: linux-host
+links:
+  - endpoints: [h1:eth1, h2:eth1]

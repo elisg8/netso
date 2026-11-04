@@ -1,0 +1,11 @@
+name: vrnetlab-vm
+title: vrnetlab VM
+kind: docker
+description: "Qualsiasi VM impacchettata con vrnetlab (vMX, XRv9k, Nexus 9000v, ASAv, PAN…) — cambia l'immagine nel nodo. Consolle sulla porta 5000. Da verificare."
+icon: router
+image: vrnetlab/vr-vmx:latest
+ram: 4096
+nics: 8
+console: exec
+shell: [telnet, 127.0.0.1, "5000"]
+privileged: true

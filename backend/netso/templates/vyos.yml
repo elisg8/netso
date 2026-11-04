@@ -1,0 +1,13 @@
+name: vyos
+title: VyOS
+kind: qemu
+description: Router VyOS (qcow2)
+icon: router
+image: vyos
+cpus: 1
+ram: 1024
+nics: 4
+console: telnet
+iface_prefix: eth
+iface_start: 0
+ansible_os: vyos.vyos.vyos

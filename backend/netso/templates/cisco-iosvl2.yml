@@ -1,0 +1,19 @@
+name: cisco-iosvl2
+title: Cisco vIOS Switch L2
+kind: qemu
+description: Cisco IOSvL2 (switch). Immagine da Cisco/CML, non inclusa.
+icon: switch
+image: cisco-iosvl2
+cpus: 1
+ram: 1024
+nics: 8
+nic_model: e1000
+disk_bus: virtio
+console: telnet
+iface_prefix: Gi0/
+iface_start: 0
+config_method: disk
+config_file: ios_config.txt
+save_cli: [terminal length 0, show running-config]
+save_enable: true
+ansible_os: cisco.ios.ios

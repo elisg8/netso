@@ -1,0 +1,12 @@
+name: linux-vm
+title: Linux VM
+kind: qemu
+description: VM Linux generica (es. Ubuntu cloud image, Debian). Console grafica VNC.
+icon: server
+image: linux-vm
+cpus: 2
+ram: 2048
+nics: 2
+console: vnc
+iface_prefix: eth
+iface_start: 0

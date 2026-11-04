@@ -1,0 +1,15 @@
+[Unit]
+Description=NetSO network lab platform
+After=network-online.target docker.service
+Wants=network-online.target docker.service
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/netso.env
+ExecStart=/opt/netso/venv/bin/netso serve --host 0.0.0.0 --port 8080
+# QEMU VMs are daemonized: keep them alive across service restarts
+KillMode=process
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

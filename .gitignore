@@ -1,0 +1,50 @@
+# --- Roba personale / interna (NON pubblicare) ---
+CLAUDE.md
+.claude/
+.DS_Store
+*.local
+*.secret
+
+# Lab e contenuti personali (es. i lab CCIE)
+deploy/netso-ccie-labs.tar.gz
+*.tar.gz
+*.tgz
+*.zip
+
+# --- Build e dipendenze ---
+node_modules/
+__pycache__/
+*.egg-info/
+build/
+dist/
+frontend/dist/
+.venv/
+venv/
+.pytest_cache/
+*.pyc
+
+# --- Immagini VM / dischi / firmware dei vendor (MAI nel repo) ---
+*.qcow2
+*.vmdk
+*.img
+*.iso
+*.bin
+*.vhd
+*.vhdx
+*.ova
+*.ovf
+
+# --- Licenze e stato runtime (dati utente, non codice) ---
+iourc
+users.json
+access.json
+library.json
+servers.json
+state.json
+labs/
+images/
+
+# --- Log e temporanei ---
+*.log
+*.tmp
+.env

@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "netso"
+version = "0.1.0"
+description = "NetSO - piattaforma all-in-one per lab di rete (QEMU/KVM + Docker)"
+license = "Apache-2.0"
+authors = [{ name = "The NetSO Authors" }]
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.27",
+    "pydantic>=2.5",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "httpx>=0.27"]
+
+[project.scripts]
+netso = "netso.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["netso*"]
+
+[tool.setuptools.package-data]
+netso = ["templates/*.yml", "assets/*"]

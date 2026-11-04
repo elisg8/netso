@@ -1,0 +1,9 @@
+name: linux-host
+title: Linux host (container)
+kind: docker
+description: Host Linux con strumenti di rete (ping, tcpdump, iperf3, curl...)
+icon: host
+image: nicolaka/netshoot:latest
+nics: 4
+console: exec
+cmd: ["sleep", "infinity"]

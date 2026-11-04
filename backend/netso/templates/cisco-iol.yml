@@ -1,0 +1,15 @@
+name: cisco-iol
+title: Cisco IOL Router
+kind: iol
+description: Cisco IOL (IOS on Linux) L3, eseguito direttamente come in EVE-NG/GNS3 con il tuo file .bin e la tua licenza iourc. Leggero, si avvia in pochi secondi.
+icon: router
+vendor: Cisco
+image: iol-l3
+ram: 1024
+nics: 8
+console: telnet
+config_method: nvram
+config_file: startup-config.cfg
+save_cli: [terminal length 0, show running-config]
+save_enable: true
+ansible_os: cisco.ios.ios
