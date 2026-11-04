@@ -6,7 +6,7 @@
 
 Piattaforma open source per lab di rete: **VM QEMU/KVM** (Cisco, Fortinet, VyOS, Linux…) e **container Docker** (FRR, host Linux…) nello stesso lab. Puoi disegnare la topologia nel browser oppure definirla in YAML, e ogni nodo ha la sua consolle nel browser. Il tutto si controlla anche da riga di comando o via API REST.
 
-> **EN —** Open-source all-in-one network lab platform: run **QEMU/KVM VMs** and **Docker containers** in the same topology, straight from your browser, CLI, or REST API. A self-hosted alternative to EVE-NG / GNS3 / CML / Containerlab. You bring your own vendor images — none are included.
+> **EN —** Open-source all-in-one network lab platform: run **QEMU/KVM VMs** and **Docker containers** in the same topology, straight from your browser, CLI, or REST API. A self-hosted network simulation.
 
 ![NetSO — editor della topologia](docs/screenshot.png)
 
