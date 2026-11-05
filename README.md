@@ -10,6 +10,53 @@ Piattaforma open source per lab di rete: **VM QEMU/KVM** (Cisco, Fortinet, VyOS,
 
 ![NetSO — editor della topologia](docs/screenshot.png)
 
+## Funzionalità
+
+**Tipi di nodo**
+- **VM QEMU/KVM** con overlay copy-on-write (l'immagine base non si tocca), consolle seriale telnet, VNC e SPICE.
+- **Container Docker** (FRR, host Linux, cEOS, SR Linux, cRPD, SONiC…), con rete di gestione dedicata.
+- **Switch bridge** con VLAN per porta (802.1Q via `bridge vlan`).
+- **Nodo NAT** verso l'esterno (bridge + IP + MASQUERADE iptables + DHCP dnsmasq).
+- **VPC** leggero in stile VPCS per generare traffico e fare ping.
+- **Cisco IOL** nativo (il tuo `.bin` e la tua licenza `iourc`) e **Dynamips** (c7200/c3725).
+- **VXLAN** per unire lab su server diversi.
+
+**Editor della topologia**
+- Canvas nel browser (disegna e collega i nodi) **oppure** definizione in **YAML**.
+- Assegnazione automatica delle interfacce; **hot-plug**: colleghi e scolleghi i cavi a lab avviato.
+- Disegni e annotazioni (testo, rettangoli, ellissi, frecce, immagini), stili di linea e curvatura.
+- Icone originali in più stili (Modern, Classic 3D, Line, Rack).
+
+**Consolle nel browser**
+- Seriale **telnet** (xterm), **VNC** (noVNC), **RDP** (Apache Guacamole), **SSH**, **SPICE**, e inoltro per HTTP/HTTPS/WinBox.
+- Finestre mobili sul foglio oppure dock in basso; più consolle aperte insieme.
+- Ponte **appunti Mac↔VM** (copia/incolla tra host e guest).
+
+**Immagini**
+- Gestore immagini: upload in streaming, conversione in qcow2, download da URL, ISO refplat CML, checksum MD5, con lavori in background.
+- Import delle immagini da **EVE-NG / PNETLab** (cartella locale o via SSH+rsync) e gestione delle immagini **Docker** (`pull` con avanzamento, `load` di `.tar`).
+
+**Import / Export**
+- Import da **Containerlab, CML, GNS3, EVE-NG (.unl)**; export verso **Containerlab** e **CML**.
+- Import di node/image definition **CML** e appliance **GNS3** (`.gns3a`) come template.
+
+**Automazione e scenari**
+- Generatori di topologia: **clos, ring, mesh, star, chain**.
+- **Genera lab**: scenari didattici pronti (OSPF, BGP, MPLS L3VPN, VRRP, multicast, filtri, sicurezza BGP…) **multi-vendor** (FRR e Cisco IOS).
+- Inventario **Ansible** / hosts / SSH generato dal lab.
+
+**Config, snapshot e multi-utente**
+- Set di **startup-config** e salvataggio della running-config (via `docker exec` o consolle seriale).
+- **Snapshot** del lab (topologia + config + snapshot interni qcow2).
+- Login utenti (PBKDF2), ruoli **admin / user / viewer**, permessi per lab (owner/edit/view) e condivisione; più server NetSO.
+
+**Strumenti**
+- **Cattura pacchetti** con Wireshark nel browser.
+- **NetSO Assistant** (AI): assistente che legge la topologia e **esegue comandi di sola lettura sui nodi** del lab avviato (provider locali come Ollama).
+- CLI `netso` e **API REST + WebSocket**.
+
+> ⚠️ **Stato del progetto.** NetSO è giovane ed è stato provato soprattutto in modalità *dry-run* durante lo sviluppo: i primi avvii su hardware reale potrebbero richiedere correzioni. I contributi sono benvenuti — vedi [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## Requisiti
 
 - Server Linux bare metal: Ubuntu 22.04/24.04 o Debian 12
