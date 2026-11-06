@@ -54,6 +54,7 @@ function ChatPanel({ lab, onClose }) {
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState(null)
   const [cfgOpen, setCfgOpen] = useState(false)
+  const [applied, setApplied] = useState({})   // `${msg}:${proposal}` -> {busy|done|error|output|backup}
   const scroll = useRef(null)
   useEffect(() => { api('/agents').then((d) => setAgents(d.agents.filter((a) => a.enabled))).catch((e) => setErr(e.message)) }, [])
   useEffect(() => { if (agents.length && !agents.some((a) => a.id === agent)) setAgent(agents[0].id) }, [agents, agent])
@@ -75,8 +76,18 @@ function ChatPanel({ lab, onClose }) {
     try {
       const body = { prompt: q, history, ...(useCtx && lab ? { lab, node: node || undefined, live } : {}) }
       const r = await api(`/agents/${agent}/ask`, { method: 'POST', body })
-      setMessages((m) => [...m, { role: 'assistant', text: r.text || '(nessuna risposta)', transcript: r.transcript || [] }])
+      setMessages((m) => [...m, { role: 'assistant', text: r.text || '(nessuna risposta)', transcript: r.transcript || [], proposals: r.proposals || [] }])
     } catch (e2) { setErr(e2.message) } finally { setBusy(false) }
+  }
+
+  // apply a config proposal on the node (the user clicked «Applica»); the server backs up the running-config first
+  const applyProposal = async (key, p) => {
+    if (!lab || applied[key]?.busy || applied[key]?.done) return
+    setApplied((s) => ({ ...s, [key]: { busy: true } }))
+    try {
+      const r = await api(`/labs/${encodeURIComponent(lab)}/nodes/${encodeURIComponent(p.node)}/config`, { method: 'POST', body: { lines: p.lines } })
+      setApplied((s) => ({ ...s, [key]: { done: true, output: r.output, backup: r.backup } }))
+    } catch (e2) { setApplied((s) => ({ ...s, [key]: { error: e2.message } })) }
   }
 
   return (
@@ -119,6 +130,23 @@ function ChatPanel({ lab, onClose }) {
                 <div className="bubble">{m.text}
                   {m.role === 'assistant' && <button className="bubble-copy" title="Copia" onClick={() => navigator.clipboard?.writeText(m.text)}><Ui name="copy" size={13} /></button>}
                 </div>
+                {m.role === 'assistant' && m.proposals?.map((p, pi) => {
+                  const key = `${i}:${pi}`, st = applied[key] || {}
+                  return (
+                    <div key={pi} className="agent-conf">
+                      <div className="conf-head"><Ui name="config" size={13} /> Config proposta per <b>{p.node}</b></div>
+                      <pre>{p.lines.join('\n')}</pre>
+                      {st.done
+                        ? <div className="conf-ok"><Ui name="check" size={13} /> Applicata su {p.node}{st.backup ? <small> · backup salvato</small> : ''}</div>
+                        : <button className="primary small conf-apply" disabled={st.busy || !lab} title={lab ? `Applica su ${p.node}` : 'Apri il lab per applicare'}
+                            onClick={() => applyProposal(key, p)}>
+                            {st.busy ? <span className="spin" /> : <><Ui name="deploy" size={13} /> Applica su {p.node}</>}
+                          </button>}
+                      {st.error && <div className="conf-err">{st.error}</div>}
+                      {st.done && st.output && <details className="conf-out"><summary>output</summary><pre>{st.output}</pre></details>}
+                    </div>
+                  )
+                })}
               </div>
             ))}
             {busy && <div className="msg assistant"><div className="bubble typing"><span /><span /><span /></div></div>}

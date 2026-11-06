@@ -1,9 +1,11 @@
-"""Live diagnostics: run a READ-ONLY command on a running lab node and return its output.
+"""Live diagnostics and config: run commands on a running lab node and return the output.
 
-The NetSO Assistant uses these to troubleshoot ("why isn't the OSPF adjacency up?"). Only read-only
-commands pass the filter (show…, ping, traceroute, ip show…), with no shell chaining/redirection.
-Docker nodes (e.g. FRRouting) run the command in the container; VM / Cisco IOL / Dynamips nodes run it
-on their serial console (telnet), the same channel used to save the running-config.
+The NetSO Assistant uses `run()` (READ-ONLY) to troubleshoot ("why isn't the OSPF adjacency up?"): only
+read-only commands pass the filter (show…, ping, traceroute, ip show…), with no shell chaining/redirection.
+`apply_config()` WRITES configuration lines the assistant proposed — callers must get the user's explicit
+confirmation first; it is never reached from the read-only path.
+Docker nodes (e.g. FRRouting) run through the container's CLI; VM / Cisco IOL / Dynamips nodes run on their
+serial console (telnet), the same channel used to save the running-config.
 """
 from __future__ import annotations
 
@@ -71,3 +73,44 @@ def run(lab_name: str, node_name: str, command: str, timeout: int = 15) -> str:
             raise DiagError(str(exc)) from exc
         return text.strip() or "(nessun output)"
     raise DiagError(f"Diagnostica live non disponibile su «{node_name}»: nessuna consolle (serve un nodo FRR, o una VM/IOL/Dynamips con consolle telnet)")
+
+
+def apply_config(lab_name: str, node_name: str, lines: list[str], timeout: int = 60) -> str:
+    """Apply configuration LINES (device CLI, without «configure terminal»/«end» — added here) on a running node.
+
+    This WRITES to the node: callers must have the user's explicit confirmation before calling it.
+    """
+    lines = [ln.rstrip() for ln in (lines or []) if ln and ln.strip()]
+    if not lines:
+        raise DiagError("Nessuna riga di configurazione da applicare")
+    for ln in lines:
+        if "\n" in ln or "\r" in ln:
+            raise DiagError("Riga di configurazione non valida (ritorno a capo nel testo)")
+    lab = topo.load_lab(lab_name)
+    node = next((x for x in lab.nodes if x.name == node_name), None)
+    if node is None:
+        raise DiagError(f"Nodo «{node_name}» inesistente nel lab")
+    tpl = topo.load_templates().get(node.template)
+    state = engine.refresh(lab_name)
+    ns = state.nodes.get(node_name)
+    if not ns or ns.status != "running":
+        raise DiagError(f"Il nodo «{node_name}» è spento: accendilo per configurarlo")
+    # Docker nodes (FRR…): one vtysh session, enter config mode, apply every line
+    if tpl and tpl.kind == "docker" and ns.container:
+        argv = ["vtysh", "-c", "configure terminal"]
+        for ln in lines:
+            argv += ["-c", ln]
+        out = engine.r.run(["docker", "exec", ns.container, *argv], check=False,
+                           fake=f"(dry-run) «{'; '.join(lines)}» non applicato su {node_name}")
+        return (out or "").strip() or "(configurazione applicata)"
+    # VM / Cisco IOL / Dynamips: type the lines on the serial console, wrapped in «conf t … end»
+    if tpl and tpl.kind in ("qemu", "iol", "dynamips") and ns.console_port:
+        if engine.r.dry_run:
+            return f"(dry-run) consolle :{ns.console_port} <- conf t; {'; '.join(lines)}; end"
+        try:
+            text = savecfg.console_config("127.0.0.1", ns.console_port,
+                                          ["configure terminal", *lines, "end"], enable=True)
+        except savecfg.SaveError as exc:
+            raise DiagError(str(exc)) from exc
+        return text.strip() or "(configurazione applicata)"
+    raise DiagError(f"Configurazione non disponibile su «{node_name}»: nessuna consolle (serve un nodo FRR, o una VM/IOL/Dynamips con consolle telnet)")

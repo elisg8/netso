@@ -5,6 +5,7 @@ import asyncio
 import hmac
 import re
 import socket
+import time
 
 import yaml
 from fastapi import Depends, FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
@@ -572,6 +573,32 @@ _FORCE_RUN = (
     "(una per riga, il nome ESATTO del nodo preso dal contesto) per ottenere i dati veri; poi ti rimando l'output. "
     "Niente prosa, niente blocchi «esempio di output», niente sessioni finte."
 )
+# config changes: the model PROPOSES, the user confirms in the UI, then the backend applies on the console
+_CONFIG_PROTOCOL = (
+    "\n\nAPPLICARE CONFIGURAZIONE: fallo SOLO se l'utente chiede di sistemare/applicare/configurare qualcosa "
+    "(non quando spiega o chiede solo di vedere un dato). Tu NON applichi nulla da solo e NON devi scrivere "
+    "«ho applicato», «fatto» o fingere di averlo configurato: PROPONI le modifiche e sarà l'utente a confermare "
+    "con «Applica». Formato della proposta, un blocco per nodo:\n"
+    "CONF <nodo>:\n"
+    "<righe di configurazione nella sintassi del dispositivo, SENZA «configure terminal» e SENZA «end»>\n"
+    "ENDCONF\n"
+    "Nel blocco metti SOLO righe di configurazione (niente «show», niente commenti, niente ```); "
+    "fuori dal blocco spiega in una frase cosa cambiano."
+)
+# CONF <nodo>: … ENDCONF  — tolerate leading markdown/bullets/backticks around the block
+_CONF_RE = re.compile(r"(?ms)^[ \t>*`\-]*CONF[ \t]+([A-Za-z0-9][A-Za-z0-9_.\-]*)[ \t]*:[ \t]*\r?\n(.*?)^[ \t>*`\-]*ENDCONF[ \t]*$")
+
+
+def _extract_proposals(text: str):
+    """Pull CONF…ENDCONF config blocks out of the reply; return (clean_text, proposals)."""
+    proposals = []
+    for node, body in _CONF_RE.findall(text):
+        lines = [ln.strip(" \t`").rstrip() for ln in body.splitlines()]
+        lines = [ln for ln in lines if ln and not ln.startswith("```")]
+        if lines:
+            proposals.append({"node": node, "lines": lines})
+    clean = re.sub(r"\n{3,}", "\n\n", _CONF_RE.sub("", text)).strip()
+    return clean, proposals
 
 
 @app.post("/api/agents/{aid}/ask", dependencies=[api])
@@ -585,18 +612,21 @@ def ask_agent(aid: str, body: AskBody):
     live = body.live and bool(ctx)
     try:
         if not live:
-            return {"text": agents_mod.ask(aid, base, system=_ASSISTANT_SYSTEM), "transcript": []}
+            reply = agents_mod.ask(aid, base, system=_ASSISTANT_SYSTEM + (_CONFIG_PROTOCOL if ctx else ""))
+            clean, proposals = _extract_proposals(reply)
+            return {"text": clean, "transcript": [], "proposals": proposals}
         # agentic loop: the model asks for read-only commands, we run them and feed the output back
         prompt, transcript, forced = base, [], False
         for _ in range(_MAX_ROUNDS):
-            reply = agents_mod.ask(aid, prompt, system=_ASSISTANT_SYSTEM + _LIVE_PROTOCOL + _LIVE_ANSWER)
+            reply = agents_mod.ask(aid, prompt, system=_ASSISTANT_SYSTEM + _LIVE_PROTOCOL + _CONFIG_PROTOCOL + _LIVE_ANSWER)
             runs = _RUN_RE.findall(reply)
             if not runs:
                 # answered without running: if it invented device output, force a real execution once
                 if not transcript and not forced and _looks_fabricated(reply):
                     forced, prompt = True, base + _FORCE_RUN
                     continue
-                return {"text": reply, "transcript": transcript}
+                clean, proposals = _extract_proposals(reply)
+                return {"text": clean, "transcript": transcript, "proposals": proposals}
             obs = []
             for node, cmd in runs[:_MAX_CMDS]:
                 try:
@@ -608,8 +638,9 @@ def ask_agent(aid: str, body: AskBody):
             prompt = (f"{prompt}\n\n[Le tue direttive]\n{reply}\n\n[Output dei comandi]\n" + "\n\n".join(obs)
                       + "\n\nProsegui: altre righe RUN se ti serve altro, altrimenti la diagnosi finale.")
         final = agents_mod.ask(aid, prompt + "\n\nOra rispondi all'utente in prosa, senza altre righe RUN.",
-                               system=_ASSISTANT_SYSTEM + _LIVE_ANSWER)
-        return {"text": final, "transcript": transcript}
+                               system=_ASSISTANT_SYSTEM + _CONFIG_PROTOCOL + _LIVE_ANSWER)
+        clean, proposals = _extract_proposals(final)
+        return {"text": clean, "transcript": transcript, "proposals": proposals}
     except Exception as exc:
         raise _err(exc)
 
@@ -1395,6 +1426,38 @@ async def open_console(name: str, node: str, body: OpenBody):
             params.update(width=str(body.width), height=str(body.height))
             return {"type": kind, "ticket": guac.new_ticket(name, node, params), "ip": ip}
         return {"type": kind, "port": await guac.forward(ip, GUEST_PORTS[kind]), "ip": ip}
+    except Exception as exc:
+        raise _err(exc)
+
+
+def _save_config_backup(lab: str, node: str, text: str) -> str | None:
+    """Stash a node's running-config before an apply, so a bad change can be undone by hand."""
+    if not text or not text.strip():
+        return None
+    d = topo.lab_dir(lab) / "config-backups"
+    d.mkdir(parents=True, exist_ok=True)
+    fn = f"{node}-{time.strftime('%Y%m%d-%H%M%S')}.cfg"
+    (d / fn).write_text(text if text.endswith("\n") else text + "\n")
+    return f"config-backups/{fn}"
+
+
+class ApplyConfigBody(BaseModel):
+    lines: list[str]
+    backup: bool = True   # save the running-config first (best effort)
+
+
+@app.post("/api/labs/{name}/nodes/{node}/config", dependencies=[api])
+def apply_node_config(name: str, node: str, body: ApplyConfigBody):
+    """Apply config lines the assistant proposed on a running node (the user confirmed in the UI)."""
+    try:
+        backup = None
+        if body.backup:
+            try:  # best effort: a failed backup must never block the apply the user asked for
+                backup = _save_config_backup(name, node, diagnostics.run(name, node, "show running-config", timeout=30))
+            except Exception:
+                backup = None
+        output = diagnostics.apply_config(name, node, body.lines)
+        return {"ok": True, "output": output, "backup": backup}
     except Exception as exc:
         raise _err(exc)
 

@@ -1163,6 +1163,14 @@ button.ghost-b { background: transparent; }
 .agent-diag .diag-line { margin: 4px 0 2px; }
 .agent-diag .diag-line code { background: var(--sunken); padding: 1px 5px; border-radius: 5px; }
 .agent-diag pre { margin: 0; padding: 6px 8px; background: var(--sunken); border-radius: 6px; white-space: pre-wrap; word-break: break-word; max-height: 160px; overflow: auto; }
+/* config proposals from the assistant (apply with explicit confirmation) */
+.agent-conf { border: 1px solid var(--accent); border-radius: 10px; padding: 8px 10px; font-size: 12px; display: flex; flex-direction: column; gap: 7px; background: color-mix(in srgb, var(--accent) 7%, transparent); }
+.agent-conf .conf-head { display: flex; align-items: center; gap: 6px; color: var(--muted); }
+.agent-conf pre { margin: 0; padding: 6px 8px; background: var(--sunken); border-radius: 6px; white-space: pre-wrap; word-break: break-word; max-height: 220px; overflow: auto; font-size: 12px; }
+.agent-conf .conf-apply { align-self: flex-start; display: inline-flex; align-items: center; gap: 5px; }
+.agent-conf .conf-ok { display: flex; align-items: center; gap: 5px; color: var(--ok, #39b36a); }
+.agent-conf .conf-err { color: var(--danger, #e05260); }
+.agent-conf .conf-out summary { cursor: pointer; color: var(--muted); }
 
 /* ---------------------------------------------------------------- NetSO Assistant: real chat window */
 .agent-panel.chat { width: 404px; height: 72vh; max-height: 740px; }
