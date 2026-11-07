@@ -558,8 +558,15 @@ def _router_chain_or_ring(scn: _Scn, rng: random.Random, n: int, pattern: str) -
         for i in range(n):
             for j in range(i + 1, n):
                 scn.link(rs[i], rs[j])
-    else:  # chain
-        rs = scn.add("r", rt, n, [(80 + i * 200, 300) for i in range(n)])
+    else:  # chain — a serpentine so long chains wrap into rows instead of one endless straight line
+        cols = min(n, 6)
+        pos = []
+        for i in range(n):
+            row, col = divmod(i, cols)
+            if row % 2:               # odd rows run right-to-left, so the chain snakes without crossing
+                col = cols - 1 - col
+            pos.append((120 + col * 200, 160 + row * 190))
+        rs = scn.add("r", rt, n, pos)
         for i in range(n - 1):
             scn.link(rs[i], rs[i + 1])
     return rs
