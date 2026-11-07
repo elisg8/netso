@@ -257,6 +257,11 @@ export function GenerateLabDialog({ folder, onClose, onError, onCreated }) {
     (!catFilter || s.cat === catFilter) &&
     (!lvlFilter || s.custom || s.level === lvlFilter) &&
     (!q || lc(`${s.label} ${s.desc} ${s.cat}`).includes(lc(q))))
+  // tieni la selezione (e la descrizione qui sotto) coerente coi filtri: se lo scenario scelto
+  // non è più fra quelli mostrati, seleziona il primo visibile
+  useEffect(() => {
+    if (filtered.length && !filtered.some((s) => s.id === scenario)) setScenario(filtered[0].id)
+  }, [q, catFilter, lvlFilter, scenarios]) // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <div className="modal-bg" onClick={onClose}>
       <form className="modal wide gen-lab" onClick={(e) => e.stopPropagation()} onSubmit={go}>

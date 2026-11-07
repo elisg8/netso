@@ -951,6 +951,15 @@ class GenLab(BaseModel):
     image: str | None = None      # scenario: which image/version of that router to use (from its «choices»)
 
 
+_MY_LABS_RE = re.compile(r"(?i)^\s*i\s*miei\s*lab\s*[·:/|\-–—]*\s*")
+
+
+def _clean_cat(cat: str | None) -> str:
+    """Strip the «I miei lab ·» prefix from a catalogue lab's category (e.g. «I miei lab · BGP» → «BGP»)."""
+    c = _MY_LABS_RE.sub("", (cat or "").strip()).strip()
+    return c or "Copie pronte"
+
+
 @app.get("/api/scenarios", dependencies=[api])
 def list_scenarios():
     """Ready lab topics by protocol, for the «Genera lab» dialog."""
@@ -960,10 +969,10 @@ def list_scenarios():
         d["ios"] = t["id"] in scenarios.IOS_TOPICS   # can be built on a Cisco IOS router too
         d["host"] = t["id"] in scenarios.HOST_TOPICS  # router-agnostic (switch + hosts)
         out.append(d)
-    # custom catalogue labs («I miei lab»): fixed ready labs you cloned in
+    # custom catalogue labs (ready labs you cloned in): drop the verbose «I miei lab ·» prefix from the category
     for m in labcatalog.list_catalog():
         out.append({"id": f"cat:{m['id']}", "label": m.get("label", m["id"]),
-                    "cat": m.get("cat", "I miei lab"), "desc": m.get("desc", ""),
+                    "cat": _clean_cat(m.get("cat")), "desc": m.get("desc", ""),
                     "level": m.get("level", 3), "custom": True})
     return out
 
