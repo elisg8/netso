@@ -282,17 +282,17 @@ export function GenerateLabDialog({ folder, onClose, onError, onCreated }) {
           </div>
         </div>
 
-        <div className="scn-grid">
-          {filtered.map((s) => (
-            <button type="button" key={s.id} className={`scn-card ${scenario === s.id ? 'on' : ''}`} onClick={() => setScenario(s.id)} title={s.desc}>
-              <span className="scn-top"><b>{s.label}</b>
-                {s.custom ? <span className="scn-badge copia">copia pronta</span> : <span className={`lv-badge ${LVL[s.level]?.[1]}`}>{LVL[s.level]?.[0]}</span>}</span>
-              <small className="scn-cat">{s.cat}</small>
-              <span className="scn-desc">{s.desc}</span>
-            </button>
-          ))}
-          {!filtered.length && <p className="muted scn-empty">Nessun argomento trovato. Prova a cambiare la ricerca o i filtri.</p>}
-        </div>
+        <label className="field scn-pick"><span>Argomento <small className="muted">· {filtered.length}</small></span>
+          <select value={filtered.some((s) => s.id === scenario) ? scenario : ''} onChange={(e) => setScenario(e.target.value)} required>
+            {!filtered.length && <option value="" disabled>Nessun argomento trovato — cambia ricerca o filtri</option>}
+            {cats.filter((c) => filtered.some((s) => s.cat === c)).map((c) => (
+              <optgroup key={c} label={c}>
+                {filtered.filter((s) => s.cat === c).map((s) => (
+                  <option key={s.id} value={s.id}>{s.label}{s.custom ? ' · copia pronta' : ` · ${LVL[s.level]?.[0] || ''}`}</option>
+                ))}
+              </optgroup>
+            ))}
+          </select></label>
 
         <div className="grid2">
           {!cur?.custom && <label className="field"><span>Numero di nodi (2–20)</span><input type="number" min="2" max="20" value={count} onChange={(e) => setCount(e.target.value)} /></label>}
