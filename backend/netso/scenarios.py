@@ -496,15 +496,27 @@ def _hosts_lab(templates, n_targets, attacker_prefix="kali", gateway=False):
 def _guide6(topic, meta, routers, if6, lo, solution):
     steps, verify = STEPS.get(topic, ([], []))
     out = [f"# Lab: {meta['label']}", "", "## Obiettivo", meta["desc"],
-           f"Configura **{meta['label']}** sui {len(routers)} router FRR (IPv6) e verifica la raggiungibilità fra le loopback.",
-           "", "## Indirizzi IPv6 (già impostati all'avvio)"]
+           f"Configura **{meta['label']}** sui {len(routers)} router FRR (IPv6) e verifica la raggiungibilità fra le loopback."]
+    if CONCEPT.get(topic):
+        out += ["", "## Come funziona", CONCEPT[topic]]
+    out += ["", "## Indirizzi IPv6 (già impostati all'avvio)",
+            "Gli indirizzi IPv6 sono già configurati: ogni link è una /64 punto-punto e ogni router ha una "
+            "loopback /128. Tu devi solo abilitare il protocollo; usa questa tabella per sapere chi è vicino a chi."]
     for r in routers:
         out.append(f"- **{r}** — loopback {lo[r]}/128")
         for ifc in sorted(if6[r]):
             ip, net, peer_ip, peer = if6[r][ifc]
             out.append(f"    - `{ifc}` {ip}/64  →  verso **{peer}** ({peer_ip})")
-    out += ["", "## Passi"] + [f"{i + 1}. {s}" for i, s in enumerate(steps)]
-    out += ["", "## Verifica"] + [f"- {v}" for v in verify]
+    out += ["", "## Passi",
+            "Apri la consolle di ogni router FRR (`vtysh` → `configure terminal`) ed esegui questi passi su "
+            "**ogni** router, adattando interfacce e indirizzi alla tabella qui sopra:"]
+    out += [f"{i + 1}. {s}" for i, s in enumerate(steps)]
+    out += ["", "## Verifica",
+            "Dopo aver configurato tutti i router, controlla adiacenze, tabelle e connettività:"]
+    out += [f"- {v}" for v in verify]
+    out += ["", "## Troubleshooting"]
+    out += [f"- {t}" for t in TROUBLE.get(topic, [])]
+    out += [f"- {t}" for t in TROUBLE_GENERIC]
     out += ["", "## Soluzione", "Config completa anche nel set «soluzione». Per nodo:"]
     for r in routers:
         out.append(f"\n### {r}\n```\n{solution[r].strip()}\n```")
@@ -1088,22 +1100,176 @@ TROUBLE_GENERIC = [
     "Dopo le modifiche salva con «do write» (o il pulsante «Salva config» di NetSO) per non perderle al riavvio.",
 ]
 
+# Spiegazione del concetto (cosa/perché/come): è il cuore di una guida vera, mostrata prima dei passi.
+CONCEPT = {
+    "static": "Il routing statico è la forma più semplice di instradamento: scrivi a mano, su ogni router, come "
+              "raggiungere ogni rete remota indicando il *next-hop*, cioè il vicino verso cui inoltrare. Non c'è "
+              "nessun protocollo che scambia informazioni, quindi è leggero e prevedibile ma non si adatta da solo: "
+              "se un link cade, le rotte restano sbagliate finché non le correggi tu. In questo lab ogni router deve "
+              "conoscere le loopback di tutti gli altri aggiungendo una rotta /32 per ciascuna, con next-hop il "
+              "vicino sul percorso più breve.",
+    "rip": "RIP (Routing Information Protocol) è un protocollo *distance-vector* storico: ogni router annuncia ai "
+           "vicini le reti che conosce con la distanza in «hop» (numero di salti) e sceglie il percorso con meno "
+           "salti, fino a un massimo di 15. È semplicissimo ma converge lentamente e non tiene conto della banda. "
+           "Qui usi RIP v2, che porta anche la subnet mask (classless), per far imparare a tutti i router le reti connesse.",
+    "ospf": "OSPF (Open Shortest Path First) è un protocollo *link-state*: ogni router descrive i propri "
+            "collegamenti, inonda queste informazioni a tutti e ciascuno costruisce una mappa completa della rete, "
+            "da cui calcola il percorso più breve (algoritmo SPF) in base al *costo*, legato alla banda. Converge "
+            "in fretta ed è lo standard fra gli IGP enterprise. In quest'area singola (area 0) tutti i router sono "
+            "alla pari e condividono lo stesso database.",
+    "ospf-multiarea": "Quando la rete cresce, un'unica area OSPF diventa pesante: la soluzione è dividerla in aree. "
+                      "L'area 0 è la dorsale (backbone) e ogni altra area deve agganciarsi ad essa tramite i router "
+                      "di confine (ABR, Area Border Router), che stanno in entrambe le aree e riassumono le rotte "
+                      "dall'una all'altra. Così ogni area ha un database più piccolo e un guasto locale non costringe "
+                      "tutta la rete a ricalcolare.",
+    "isis": "IS-IS è un protocollo *link-state* come OSPF, molto amato dai grandi provider. Al posto degli indirizzi "
+            "IP usa indirizzi NSAP (il «NET») per identificare i router e lavora direttamente a livello 2. Ogni "
+            "router opera a un livello (L1 dentro l'area, L2 fra aree); qui usiamo il level-2 per far parlare tutti "
+            "i router fra loro.",
+    "eigrp": "EIGRP (di origine Cisco, qui tramite FRR) è un *distance-vector* avanzato: misura la distanza con una "
+             "metrica composita (banda e ritardo) e tiene pronto un percorso di backup (*feasible successor*) per "
+             "convergere quasi istantaneamente. I router dello stesso «AS» (qui l'AS 1) diventano vicini e si "
+             "scambiano le rotte. È efficiente e rapido da configurare.",
+    "redistribute": "Ogni protocollo di routing vive nel suo mondo: rotte statiche, reti connesse e i vari IGP non "
+                    "si parlano da soli. La *ridistribuzione* fa da ponte, iniettando le rotte di una sorgente dentro "
+                    "un altro protocollo. Qui OSPF ridistribuisce le reti connesse e una rotta statica, così compaiono "
+                    "sugli altri router come rotte esterne (tipo O E2).",
+    "ospf-auth": "Senza protezione, chiunque sulla stessa rete potrebbe iniettare informazioni OSPF false e dirottare "
+                 "il traffico. L'autenticazione fa sì che due router formino l'adiacenza solo se condividono la stessa "
+                 "chiave. Qui usi l'autenticazione MD5 (message-digest): ogni pacchetto porta un hash calcolato con la "
+                 "chiave, e un router con la chiave sbagliata viene semplicemente ignorato.",
+    "bfd": "Quando un link cade, OSPF se ne accorge solo allo scadere dei suoi timer, cioè dopo secondi. BFD "
+           "(Bidirectional Forwarding Detection) è un meccanismo leggerissimo che manda pacchetti molto frequenti fra "
+           "due vicini e rileva il guasto in millisecondi, poi avvisa subito OSPF di ricalcolare. Il risultato è un "
+           "failover quasi istantaneo. In questo lab abbini BFD a OSPF e stacchi un link per vedere la differenza.",
+    "ospf-cost": "In OSPF viene scelto il percorso con il *costo* totale più basso, e il costo di un'interfaccia è "
+                 "inversamente proporzionale alla banda. Alzando a mano il costo di un link lo rendi «meno "
+                 "conveniente», così SPF preferisce l'altro percorso: è il modo pulito di fare *traffic engineering* "
+                 "in OSPF. Qui ci sono due percorsi fra i due capi; aumenti il costo su un link e verifichi che il "
+                 "traffico passi dall'altro.",
+    "ospf-default": "Invece di configurare una rotta per ogni destinazione esterna, conviene avere una sola rotta di "
+                    "default (0.0.0.0/0) verso l'uscita. Con «default-information originate» un router inietta questa "
+                    "default dentro OSPF, e tutti gli altri la imparano automaticamente come «gateway of last "
+                    "resort». Qui un router origina la default e verifichi che compaia (O*E2) sugli altri.",
+    "bgp-ebgp": "BGP è il protocollo che tiene insieme Internet: mette in comunicazione sistemi autonomi (AS) "
+                "diversi, cioè reti gestite da enti diversi. *eBGP* è la sessione fra due AS confinanti: ogni router "
+                "annuncia al vicino i prefissi che vuole far raggiungere, con il relativo AS-path. Qui ogni router è "
+                "un AS a sé: configuri una sessione eBGP su ciascun collegamento e annunci la loopback.",
+    "bgp-ibgp": "Dentro un singolo AS, i router di bordo che parlano eBGP devono anche scambiarsi le rotte fra loro: "
+                "questo è *iBGP*. A differenza di eBGP, iBGP non modifica l'AS-path, perciò di regola serve una maglia "
+                "completa (full-mesh) fra tutti i router iBGP. Qui costruisci prima un underlay OSPF per raggiungere le "
+                "loopback, poi stabilisci iBGP sulle loopback (con update-source) perché la sessione resti su anche se "
+                "cade un link.",
+    "bgp-security": "Accettare qualunque annuncio da un vicino BGP è pericoloso: un errore o un attacco può dirottare "
+                    "traffico. Qui metti due difese di base: una *prefix-list* in ingresso che lascia passare solo i "
+                    "prefissi legittimi (le loopback /32) e scarta il resto, e un *maximum-prefix* che chiude la "
+                    "sessione se il vicino annuncia troppe rotte (segnale di leak). È il primo passo dell'hardening "
+                    "di un router di bordo.",
+    "route-filter": "A volte vuoi che una certa rete non venga appresa o propagata, per sicurezza o per scelta di "
+                    "progetto. Un filtro di routing fa esattamente questo: una access-list identifica i prefissi e una "
+                    "*distribute-list* applicata al protocollo decide cosa accettare o annunciare. Qui, con OSPF "
+                    "attivo, filtri una loopback specifica e verifichi che sparisca dalle tabelle degli altri router.",
+    "bgp-communities": "Le *BGP community* sono etichette (nel formato AS:valore) che attacchi agli annunci per "
+                       "raggrupparli e trattarli in modo coerente lungo il percorso. Non cambiano il routing da sole, "
+                       "ma permettono di applicare politiche pulite («questi li preferisco», «questi non li esporto»). "
+                       "Qui marchi gli annunci con una route-map e poi li selezioni/filtri in base alla community.",
+    "bgp-rr": "Il full-mesh iBGP non scala: con N router servono N·(N-1)/2 sessioni. Il *route reflector* risolve il "
+              "problema facendo da hub: un router centrale riflette gli annunci iBGP ricevuti da un client verso gli "
+              "altri, così ogni client fa peer solo col reflector. Qui scegli un RR, marchi gli altri come client e "
+              "verifichi che le rotte si propaghino senza maglia completa.",
+    "bgp-localpref": "Quando per la stessa destinazione esistono più uscite, la *local-preference* decide quale "
+                     "preferire: è fra i primi attributi guardati da BGP e vale solo dentro l'AS. Più alta = "
+                     "preferita. Qui ci sono due percorsi verso l'altro capo; con una route-map in ingresso alzi la "
+                     "local-preference su uno dei vicini per convogliare il traffico d'uscita su quel percorso.",
+    "bgp-aggregate": "Annunciare tante rotte specifiche appesantisce le tabelle di tutti. L'*aggregazione* "
+                     "(summarization) le riassume in un unico prefisso più ampio. Con «aggregate-address … "
+                     "summary-only» il router annuncia solo il blocco riassuntivo e sopprime le singole componenti, "
+                     "riducendo le tabelle e nascondendo i dettagli interni. Qui aggreghi le /32 in un /16.",
+    "vrrp": "Se gli host hanno un solo router come gateway e questo cade, restano isolati. VRRP (Virtual Router "
+            "Redundancy Protocol) fa condividere a due o più router un *IP virtuale*: gli host usano quello come "
+            "gateway, mentre fra i router uno fa da master e l'altro da backup. Se il master cade, il backup prende "
+            "l'IP virtuale in automatico e gli host non se ne accorgono. Qui due gateway condividono il VIP e provi "
+            "il failover spegnendo il master.",
+    "mpls-ldp": "MPLS inoltra i pacchetti in base a *etichette* (label) invece che all'IP di destinazione, rendendo "
+                "il core veloce e indipendente dai singoli prefissi. LDP (Label Distribution Protocol) distribuisce "
+                "automaticamente queste etichette fra i router del core, appoggiandosi all'IGP (qui OSPF) per sapere "
+                "dove sono le loopback. Qui costruisci un core MPLS e verifichi che il traffico fra le loopback "
+                "viaggi etichettato.",
+    "mpls-l3vpn": "L'MPLS L3VPN permette a un provider di trasportare le reti di più clienti sullo stesso core, "
+                  "tenendole separate. Ogni cliente vive in una *VRF* (una tabella di routing isolata) sui router di "
+                  "bordo (PE), e le rotte dei clienti viaggiano nel core dentro MP-BGP VPNv4, etichettate da MPLS; il "
+                  "router interno (P) fa solo transito e non conosce i clienti. Qui configuri la VRF «CUST» sui PE e "
+                  "MP-BGP fra le loro loopback.",
+    "vxlan-evpn": "Nei data center spine-leaf si vuole estendere le reti L2 sopra un trasporto L3 scalabile: *VXLAN* "
+                  "incapsula i frame Ethernet in UDP e li identifica con un VNI, mentre *BGP EVPN* fa da piano di "
+                  "controllo, distribuendo MAC e rotte fra i leaf. Gli spine fanno da dorsale e da route-reflector. "
+                  "Qui costruisci un underlay OSPF e un overlay BGP EVPN con «advertise-all-vni».",
+    "ipv6-ospf": "OSPFv3 è la versione di OSPF per IPv6: stessa logica link-state e stesso algoritmo SPF, ma gira "
+                 "sopra IPv6 e si abilita per interfaccia. Il router-id resta un numero a 32 bit (in formato IPv4) "
+                 "anche se la rete è IPv6. Qui, con gli indirizzi 2001:db8::/32 già pronti, abiliti OSPFv3 su ogni "
+                 "interfaccia e verifichi la raggiungibilità fra le loopback con ping6.",
+    "ipv6-bgp": "BGP trasporta anche prefissi IPv6 usando le *address-family*: la sessione può nascere su un "
+                "indirizzo IPv6 e, dentro «address-family ipv6 unicast», si attivano i vicini e si annunciano i "
+                "prefissi /128 delle loopback. La logica (AS, AS-path, best-path) è identica a IPv4. Qui stabilisci "
+                "eBGP IPv6 fra i router e controlli la tabella con «show bgp ipv6 unicast».",
+    "pbr": "Normalmente un router decide dove mandare un pacchetto solo in base alla destinazione. Il Policy-Based "
+           "Routing (PBR) rompe questa regola: puoi instradare in base alla *sorgente*, alla porta o ad altri "
+           "criteri, forzando un next-hop diverso da quello della tabella di routing. Qui definisci una pbr-map che "
+           "intercetta il traffico di una certa sorgente e lo manda su un next-hop scelto, applicandola "
+           "all'interfaccia d'ingresso.",
+    "multicast": "Il multicast consegna lo stesso flusso a molti ricevitori senza duplicarlo per ognuno, usando "
+                 "indirizzi di gruppo (224.0.0.0/4). PIM-SM (Sparse Mode) costruisce gli alberi di distribuzione a "
+                 "partire da un punto d'incontro, il *Rendezvous Point* (RP): le sorgenti si registrano al RP e i "
+                 "ricevitori lo raggiungono, poi l'albero si ottimizza. Qui, con OSPF come underlay, abiliti PIM, "
+                 "definisci l'RP e osservi la tabella mroute mentre scorre il traffico.",
+    "bgp-hijack": "Un *BGP hijack* avviene quando un AS annuncia un prefisso che non è suo (o uno più specifico): "
+                  "poiché BGP preferisce il prefisso più specifico e si fida degli annunci, il traffico altrui viene "
+                  "dirottato verso l'attaccante. È uno degli incidenti più gravi di Internet. Qui, in sandbox, prima "
+                  "provochi il dirottamento, poi ti difendi con un filtro (prefix-list / AS-path) che accetta quel "
+                  "prefisso solo dall'origine legittima.",
+    "vlan": "Una VLAN separa logicamente una rete fisica in più reti distinte: due host sulla stessa VLAN si parlano "
+            "come se fossero su uno switch dedicato, due host su VLAN diverse no, anche se collegati allo stesso "
+            "switch. Si assegna una VLAN a ogni porta (modalità *access*) e si usano i *trunk* per trasportare più "
+            "VLAN su un solo cavo. Per far comunicare VLAN diverse serve un router o uno switch L3 (inter-VLAN routing).",
+    "mitm-arp": "Nelle LAN Ethernet gli host usano ARP per scoprire il MAC associato a un IP e si fidano ciecamente "
+                "delle risposte. In un attacco *ARP spoofing* l'attaccante invia risposte ARP false associando il "
+                "proprio MAC all'IP del gateway (e viceversa): da quel momento il traffico fra vittima e gateway "
+                "passa da lui, che può leggerlo o alterarlo (*man-in-the-middle*). La difesa consiste nel non fidarsi "
+                "dell'ARP dinamico: voci statiche, Dynamic ARP Inspection, DHCP snooping e traffico cifrato.",
+    "recon-scan": "La ricognizione è la prima fase di un attacco — e di un test di sicurezza: prima di colpire si "
+                  "mappa la rete per sapere quali host sono vivi e quali servizi espongono. Strumenti come nmap fanno "
+                  "un *ping sweep* per trovare gli host e poi una *scansione delle porte* per identificare servizi e "
+                  "versioni, da cui si cercano vulnerabilità note. Difendersi significa ridurre la superficie esposta "
+                  "(chiudere servizi, aggiornare), filtrare col firewall e rendere la scansione rumorosa e monitorata.",
+}
+
 
 def _guide(topic: str, meta: dict, routers: list[str], ifips: dict, lo: dict, solution: dict,
            pattern: str = "", intro: str = "", router_label: str = "FRR") -> str:
     steps, verify = STEPS.get(topic, ([], []))
     out = [f"# Lab: {meta['label']}", "", "## Obiettivo",
            f"{meta['desc']} {intro}".strip(),
-           f"Configura **{meta['label']}** sui {len(routers)} router {router_label} e verifica la raggiungibilità fra le loopback."]
-    out += ["", "## Indirizzi IP (già impostati all'avvio)"]
+           f"Configura **{meta['label']}** sui {len(routers)} router {router_label} ({pattern or 'topologia realistica'}) "
+           "e verifica la raggiungibilità fra le loopback."]
+    if CONCEPT.get(topic):
+        out += ["", "## Come funziona", CONCEPT[topic]]
+    out += ["", "## Indirizzi IP (già impostati all'avvio)",
+            "Gli IP sono già configurati: ogni link è una /30 punto-punto e ogni router ha una loopback /32 "
+            "(il suo router-id). Tu devi solo far girare il protocollo; questa tabella ti serve per sapere chi è "
+            "vicino a chi e quali next-hop usare."]
     for r in routers:
         out.append(f"- **{r}** — loopback {lo[r]}/32")
         for ifc in sorted(ifips.get(r, {})):
             ip, pfx, net, peer_ip, peer = ifips[r][ifc]
             out.append(f"    - `{ifc}` {ip}/{pfx}  →  verso **{peer}** ({peer_ip})")
-    out += ["", "## Passi"]
+    out += ["", "## Passi",
+            f"Apri la consolle di ogni router {router_label} ed entra in configurazione (su FRR `vtysh` poi "
+            "`configure terminal`, su IOS `configure terminal`). Esegui questi passi su **ogni** router, "
+            "adattando interfacce e indirizzi alla tabella qui sopra:"]
     out += [f"{i + 1}. {s}" for i, s in enumerate(steps)] or ["1. Configura il protocollo richiesto."]
-    out += ["", "## Verifica"]
+    out += ["", "## Verifica",
+            "Dopo aver configurato tutti i router, controlla che il protocollo lavori e che ci sia connettività "
+            "end-to-end:"]
     out += [f"- {v}" for v in verify] or ["- Verifica le tabelle di routing e fai ping."]
     out += ["", "## Troubleshooting"]
     out += [f"- {t}" for t in TROUBLE.get(topic, [])]
@@ -1161,6 +1327,7 @@ def build(topic: str, templates: dict[str, Template], seed: int | None = None,
         desc = f"Palestra VLAN: uno switch con {n} host nella rete 192.168.10.0/24."
         instr = ("# Lab: VLAN L2\n\n## Obiettivo\nUno switch con host nella rete 192.168.10.0/24. "
                  "Crea le VLAN per porta sullo switch e verifica quali host si parlano.\n\n"
+                 "## Come funziona\n" + CONCEPT["vlan"] + "\n\n"
                  "## Passi\n1. Assegna agli host IP in 192.168.10.0/24 (es. .11, .12, …).\n"
                  "2. Sullo switch (nodo «bridge») imposta le VLAN per porta (access/trunk).\n"
                  "3. Metti alcuni host in VLAN diverse.\n\n## Verifica\n- ping fra host della stessa VLAN (ok) e di VLAN diverse (ko).\n\n"
@@ -1229,6 +1396,7 @@ def build(topic: str, templates: dict[str, Template], seed: int | None = None,
         steps, verify = STEPS["vrrp"]
         instr = ("# Lab: VRRP (gateway ridondante)\n\n## Obiettivo\n"
                  f"Due router ({gws[0]}, {gws[1]}) condividono il gateway virtuale **{vip}** per gli host della LAN 192.168.1.0/24.\n\n"
+                 "## Come funziona\n" + CONCEPT["vrrp"] + "\n\n"
                  "## Indirizzi\n"
                  f"- **{gws[0]}** {gw_iface[gws[0]]} 192.168.1.2/24 (master)\n- **{gws[1]}** {gw_iface[gws[1]]} 192.168.1.3/24 (backup)\n"
                  f"- IP virtuale (gateway degli host): **{vip}**\n- Host: 192.168.1.11, .12, … con gateway {vip}\n\n"
@@ -1279,6 +1447,7 @@ def build(topic: str, templates: dict[str, Template], seed: int | None = None,
                  "## Obiettivo\n"
                  f"L'attaccante **{atk}** e le vittime ({', '.join(vics)}) sono sulla stessa LAN 192.168.1.0/24. "
                  "Capire come un attaccante intercetta il traffico con ARP spoofing e come ci si difende.\n\n"
+                 "## Come funziona\n" + CONCEPT["mitm-arp"] + "\n\n"
                  "## Preparazione\n- Assegna gli IP: attaccante 192.168.1.10, vittime .11, .12, …; gateway virtuale 192.168.1.1.\n"
                  "- Per gli strumenti veri serve un'immagine attaccante (es. Kali) sul nodo attaccante.\n\n"
                  "## Attacco (da imparare)\n1. Osserva la tabella ARP delle vittime (`arp -a`).\n"
@@ -1300,6 +1469,7 @@ def build(topic: str, templates: dict[str, Template], seed: int | None = None,
                  "## Obiettivo\n"
                  f"Dall'attaccante **{atk}** mappare la rete 192.168.1.0/24 (gateway **{gw}**, server {', '.join(srvs)}), "
                  "trovare host e servizi, poi irrobustire.\n\n"
+                 "## Come funziona\n" + CONCEPT["recon-scan"] + "\n\n"
                  "## Passi (da imparare)\n1. Scopri gli host attivi: ping sweep / `nmap -sn 192.168.1.0/24`.\n"
                  "2. Scansiona le porte e i servizi dei server: `nmap -sV <ip>`.\n"
                  "3. Annota versioni e servizi esposti.\n\n"
