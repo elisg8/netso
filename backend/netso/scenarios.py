@@ -8,7 +8,9 @@ switches are the Linux bridge. The generated configs target FRRouting's integrat
 from __future__ import annotations
 
 import ipaddress
+import math
 import random
+from collections import deque
 
 from .automation import GenerateError, _Builder, _circle, _row
 from .models import SHARED_KINDS, Lab, Template
@@ -209,13 +211,8 @@ def _cfg_eigrp(r, ifips, lo, routers, links, idx):
 
 def _cfg_static(r, ifips, lo, routers, links, idx):
     body = _head(r) + _ifaces(r, ifips, lo)
-    # chain: route to every other loopback via the neighbour that sits on the way
-    pos = {name: i for i, name in enumerate(routers)}
-    for other in routers:
-        if other == r:
-            continue
-        step = 1 if pos[other] > idx else -1
-        nb = routers[idx + step]
+    # a static route to every other loopback via the next hop on the shortest path (works on any topology)
+    for other, nb in _first_hops(r, routers, links).items():
         nh = next((ifips[r][ifc][3] for ifc in ifips[r] if ifips[r][ifc][4] == nb), None)
         if nh:
             body += f"ip route {lo[other]}/32 {nh}\n"
@@ -345,11 +342,13 @@ def _cfg_bgp_rr(r, ifips, lo, routers, links, idx):
 
 
 def _cfg_ospf_cost(r, ifips, lo, routers, links, idx):
-    """OSPF ovunque; il link fra i primi due router ha costo alto, così il traffico prende l'altro lato dell'anello."""
-    a, b = routers[0], routers[1]
+    """OSPF ovunque; un'uscita del primo router ha costo alto, così verso l'altro capo si usa il secondo percorso."""
+    a = routers[0]
+    a_ifs = sorted(ifips.get(a, {}))
+    b = ifips[a][a_ifs[0]][4] if a_ifs else None   # il vicino sulla prima interfaccia del primo router
 
     def extra(ifc):
-        if ifc == "lo":
+        if ifc == "lo" or b is None:
             return ""
         return " ip ospf cost 100\n" if {r, ifips[r][ifc][4]} == {a, b} else ""
     body = _head(r) + _ifaces(r, ifips, lo, extra=extra)
@@ -572,6 +571,83 @@ def _router_chain_or_ring(scn: _Scn, rng: random.Random, n: int, pattern: str) -
     return rs
 
 
+def _realistic_topology(scn: _Scn, rng: random.Random, n: int) -> list[str]:
+    """A real-world shape instead of a line/ring: a small redundant core with branch/access routers
+    hanging off it (some dual-homed), drawn as a core in the middle with the sites around it."""
+    c = 1 if n <= 1 else 2 if n <= 4 else 3 if n <= 9 else 4
+    c = min(c, n)
+    cx, cy = 480, 340
+    pos: list[tuple[float, float]] = [(cx, cy)] * n
+    for i in range(c):                                  # core cluster near the centre
+        ang = 2 * math.pi * i / c - math.pi / 2
+        pos[i] = (cx + (0 if c == 1 else 175) * math.cos(ang), cy + (0 if c == 1 else 125) * math.sin(ang))
+    acc = list(range(c, n))                             # access / branch routers on an ellipse around the core
+    rx, ry = max(420, len(acc) * 46), max(300, len(acc) * 32)
+    for k, idx in enumerate(acc):
+        ang = 2 * math.pi * k / max(1, len(acc)) - math.pi / 2
+        pos[idx] = (cx + rx * math.cos(ang), cy + ry * math.sin(ang))
+    rs = scn.add("r", scn.router, n, pos)
+    if c == 2:                                          # core interconnect: redundant among the cores
+        scn.link(rs[0], rs[1])
+    elif c >= 3:
+        for i in range(c):
+            scn.link(rs[i], rs[(i + 1) % c])            # ring (triangle for 3)
+        if c >= 4:
+            scn.link(rs[0], rs[2])                      # + a diagonal → partial mesh
+    for k, idx in enumerate(acc):                       # each site homes to the nearest core…
+        primary = round(k / max(1, len(acc)) * c) % c if c else 0
+        scn.link(rs[idx], rs[primary])
+        if c >= 2 and k % 2 == 1:                       # …and ~every other one is dual-homed for redundancy
+            scn.link(rs[idx], rs[(primary + 1) % c])
+    return rs
+
+
+def _dualpath_topology(scn: _Scn, rng: random.Random, n: int) -> list[str]:
+    """Two diverse paths between the two ends (A … B): a redundant design for path-selection labs."""
+    top = (n - 2 + 1) // 2
+    bot = (n - 2) - top
+    cy = 340
+    pos: list[tuple[float, float]] = [(170, cy), (880, cy)]      # A (left), B (right)
+    for j in range(top):
+        pos.append((170 + (880 - 170) * (j + 1) / (top + 1), cy - 170))
+    for j in range(bot):
+        pos.append((170 + (880 - 170) * (j + 1) / (bot + 1), cy + 170))
+    rs = scn.add("r", scn.router, n, pos)
+    a, b = rs[0], rs[1]
+    for path in (rs[2:2 + top], rs[2 + top:2 + top + bot]):
+        prev = a
+        for x in path:
+            scn.link(prev, x)
+            prev = x
+        scn.link(prev, b)
+    return rs
+
+
+def _first_hops(r: str, routers: list[str], links: list[dict]) -> dict[str, str]:
+    """BFS over the link graph from r; returns {destination router: the neighbour of r on the shortest path}."""
+    adj: dict[str, set] = {x: set() for x in routers}
+    for ln in links:
+        adj[ln["a"]].add(ln["b"])
+        adj[ln["b"]].add(ln["a"])
+    parent = {r: r}
+    q = deque([r])
+    while q:
+        u = q.popleft()
+        for v in sorted(adj[u]):
+            if v not in parent:
+                parent[v] = u
+                q.append(v)
+    hops = {}
+    for o in routers:
+        if o == r or o not in parent:
+            continue
+        cur = o
+        while parent[cur] != r:
+            cur = parent[cur]
+        hops[o] = cur
+    return hops
+
+
 def _clamp(count, default: int, lo: int, hi: int) -> int:
     if count is None:
         return default
@@ -686,12 +762,7 @@ def _ios_isis(r, ifips, lo, routers, links, idx):
 
 def _ios_static(r, ifips, lo, routers, links, idx):
     body = _head_ios(r) + _ifaces_ios(r, ifips, lo)
-    pos = {name: i for i, name in enumerate(routers)}
-    for other in routers:
-        if other == r:
-            continue
-        step = 1 if pos[other] > idx else -1
-        nb = routers[idx + step]
+    for other, nb in _first_hops(r, routers, links).items():
         nh = next((ifips[r][ifc][3] for ifc in ifips[r] if ifips[r][ifc][4] == nb), None)
         if nh:
             body += f"ip route {lo[other]} 255.255.255.255 {nh}\n"
@@ -971,16 +1042,16 @@ STEPS = {
     "vxlan-evpn": (["Underlay: OSPF su spine e leaf per raggiungere le loopback.",
                     "Overlay: «router bgp 65000», «address-family l2vpn evpn»; i leaf fanno peer con gli spine (route-reflector). Sui leaf aggiungi «advertise-all-vni» e il VNI."],
                    ["«show bgp l2vpn evpn summary»", "«show evpn vni»"]),
-    "ospf-cost": (["Abilita OSPF area 0 su tutti i router (come lo scenario OSPF).",
-                   "Sul link fra i primi due router alza il costo: «interface <ifc>» → «ip ospf cost 100» su ENTRAMBE le estremità. Il traffico fra quei due router ora fa il giro dall'altro lato dell'anello."],
+    "ospf-cost": (["Abilita OSPF area 0 su tutti i router: fra i due capi (A e B) ci sono due percorsi diversi.",
+                   "Su un'uscita del primo router (e sull'altra estremità dello stesso link) alza il costo: «interface <ifc>» → «ip ospf cost 100». Il traffico verso l'altro capo passa così sul secondo percorso."],
                   ["«show ip ospf interface <ifc>» (Cost 100 sull'interfaccia modificata)",
-                   "«show ip route ospf»: il next-hop verso la loopback remota è cambiato",
-                   "«traceroute <loopback>» mostra il percorso più lungo lungo l'anello"]),
+                   "«show ip route ospf»: il next-hop verso la loopback dell'altro capo è cambiato",
+                   "«traceroute <loopback>» mostra il percorso alternativo"]),
     "ospf-default": (["Abilita OSPF area 0 su tutti i router.",
                       "Sul primo router crea una default verso Null0 («ip route 0.0.0.0/0 Null0») e in «router ospf» aggiungi «default-information originate»."],
                      ["sugli altri router «show ip route» mostra «O*E2 0.0.0.0/0» (gateway of last resort appreso)",
                       "«show ip ospf database external» (LSA di tipo 5 per la default)"]),
-    "bgp-localpref": (["Configura eBGP (un AS per router) sull'anello: ogni router ha due uscite verso la stessa destinazione.",
+    "bgp-localpref": (["Configura eBGP (un AS per router): fra i due capi ci sono due percorsi, quindi due vie per la stessa destinazione.",
                        "Crea «route-map PREFER permit 10» con «set local-preference 200» e applicala in ingresso («neighbor <ip> route-map PREFER in») su UNO dei due vicini: quelle rotte diventano preferite."],
                       ["«show ip bgp» (LocPrf = 200 sulle rotte preferite; il «>» indica la best-path)",
                        "«show ip bgp <loopback-remota>»: confronta i due percorsi e vedi quale vince per local-preference"]),
@@ -1241,9 +1312,9 @@ def build(topic: str, templates: dict[str, Template], seed: int | None = None,
     # ---- IPv6 scenarios (OSPFv3 / eBGP IPv6)
     if topic in ("ipv6-ospf", "ipv6-bgp"):
         scn = _Scn(templates, router_tpl)
-        n = _clamp(count, rng.randint(3, 5), 2, 20)
-        pattern = rng.choice(["ring", "chain"] + (["mesh"] if n <= 6 else []))
-        routers = _router_chain_or_ring(scn, rng, n, pattern)
+        n = _clamp(count, rng.randint(4, 6), 2, 20)
+        pattern = "core ridondante + rami"
+        routers = _realistic_topology(scn, rng, n)
         res = scn.result()
         lo6, if6 = _address6(routers, scn.links)
         for k, ln in enumerate(res["links"]):
@@ -1262,14 +1333,17 @@ def build(topic: str, templates: dict[str, Template], seed: int | None = None,
 
     # ---- router scenarios (IGP / BGP / MPLS / static / RIP)
     scn = _Scn(templates, router_tpl)
-    min_n = 4 if topic == "ospf-multiarea" else 3 if topic in ("ospf-cost", "bgp-localpref") else 2
-    n = _clamp(count, rng.randint(3, 5), min_n, 20)
-    # full mesh explodes with many nodes (N·(N-1)/2 links), so keep it only for small labs
-    choices = ["ring", "chain"] + (["mesh"] if n <= 6 else [])
-    # path-selection labs need two paths between the ends, so force a ring
-    pattern = ({"static": "chain", "ospf-multiarea": "ring", "ospf-cost": "ring", "bgp-localpref": "ring",
-                "mpls-ldp": rng.choice(["ring", "chain"])}.get(topic) or rng.choice(choices))
-    routers = _router_chain_or_ring(scn, rng, n, pattern)
+    min_n = 4 if topic in ("ospf-multiarea", "ospf-cost", "bgp-localpref") else 2
+    n = _clamp(count, rng.randint(4, 6), min_n, 20)
+    if topic in ("ospf-cost", "bgp-localpref"):      # path-selection: two diverse paths between the ends
+        pattern = "doppio percorso"
+        routers = _dualpath_topology(scn, rng, n)
+    elif topic == "ospf-multiarea":                  # backbone (area 0) + peripheral areas, on a ring
+        pattern = "anello multiarea"
+        routers = _router_chain_or_ring(scn, rng, n, "ring")
+    else:                                            # real-world shape: redundant core + branch sites
+        pattern = "core ridondante + rami"
+        routers = _realistic_topology(scn, rng, n)
     res = scn.result()
     lo, ifips = _address(routers, scn.links)
 
