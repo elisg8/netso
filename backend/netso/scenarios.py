@@ -40,6 +40,10 @@ TOPICS = [
      "desc": "OSPF area 0 con autenticazione MD5 sulle adiacenze."},
     {"id": "bfd", "label": "OSPF + BFD (failover rapido)", "cat": "IGP", "level": 3, "router": ROUTER,
      "desc": "OSPF con BFD per rilevare i guasti in millisecondi."},
+    {"id": "ospf-cost", "label": "OSPF – costo e scelta del percorso", "cat": "IGP", "level": 2, "router": ROUTER,
+     "desc": "Anello OSPF: alzando il costo di un link sposti il traffico sull'altro percorso."},
+    {"id": "ospf-default", "label": "OSPF – rotta di default (default-information)", "cat": "IGP", "level": 2, "router": ROUTER,
+     "desc": "Un router inietta la rotta di default in OSPF: gateway of last resort per tutti gli altri."},
     {"id": "bgp-ebgp", "label": "BGP – eBGP", "cat": "BGP", "level": 2, "router": ROUTER,
      "desc": "Ogni router un AS diverso, sessioni eBGP sui collegamenti."},
     {"id": "bgp-ibgp", "label": "BGP – iBGP + OSPF", "cat": "BGP", "level": 3, "router": ROUTER,
@@ -52,6 +56,10 @@ TOPICS = [
      "desc": "eBGP che marca gli annunci con BGP community e le filtra."},
     {"id": "bgp-rr", "label": "BGP route reflector", "cat": "BGP", "level": 3, "router": ROUTER,
      "desc": "iBGP con un route reflector al posto del full-mesh."},
+    {"id": "bgp-localpref", "label": "BGP – local-preference (scelta del percorso)", "cat": "BGP", "level": 3, "router": ROUTER,
+     "desc": "eBGP ad anello: una route-map alza la local-preference per preferire un percorso d'uscita."},
+    {"id": "bgp-aggregate", "label": "BGP – aggregazione (summary-only)", "cat": "BGP", "level": 3, "router": ROUTER,
+     "desc": "Un router annuncia l'aggregato 10.255.0.0/16 al posto delle singole /32 (summarization)."},
     {"id": "vrrp", "label": "VRRP (gateway ridondante)", "cat": "Alta affidabilità", "level": 3, "router": ROUTER,
      "desc": "Due router condividono un IP virtuale come gateway degli host."},
     {"id": "mpls-ldp", "label": "MPLS core (LDP)", "cat": "MPLS", "level": 3, "router": ROUTER,
@@ -336,6 +344,59 @@ def _cfg_bgp_rr(r, ifips, lo, routers, links, idx):
     return body
 
 
+def _cfg_ospf_cost(r, ifips, lo, routers, links, idx):
+    """OSPF ovunque; il link fra i primi due router ha costo alto, così il traffico prende l'altro lato dell'anello."""
+    a, b = routers[0], routers[1]
+
+    def extra(ifc):
+        if ifc == "lo":
+            return ""
+        return " ip ospf cost 100\n" if {r, ifips[r][ifc][4]} == {a, b} else ""
+    body = _head(r) + _ifaces(r, ifips, lo, extra=extra)
+    body += _ospf_block(r, ifips, lo)
+    return body
+
+
+def _cfg_ospf_default(r, ifips, lo, routers, links, idx):
+    """Il primo router inietta la rotta di default in OSPF (gateway of last resort per gli altri)."""
+    body = _head(r) + _ifaces(r, ifips, lo)
+    if r == routers[0]:
+        body += "ip route 0.0.0.0/0 Null0\n!\n"
+        body += _ospf_block(r, ifips, lo, extra_router=" default-information originate\n")
+    else:
+        body += _ospf_block(r, ifips, lo)
+    return body
+
+
+def _cfg_bgp_localpref(r, ifips, lo, routers, links, idx):
+    """eBGP + local-preference: le rotte apprese dal primo vicino sono preferite nella selezione del percorso."""
+    asn = 65001 + idx
+    body = _head(r) + _ifaces(r, ifips, lo)
+    body += "route-map PREFER permit 10\n set local-preference 200\n!\n"
+    body += f"router bgp {asn}\n bgp router-id {lo[r]}\n no bgp ebgp-requires-policy\n"
+    body += f" network {lo[r]}/32\n redistribute connected\n"
+    for j, ifc in enumerate(sorted(ifips[r])):
+        ip, pfx, net, peer_ip, peer = ifips[r][ifc]
+        body += f" neighbor {peer_ip} remote-as {65001 + routers.index(peer)}\n"
+        if j == 0:
+            body += f" neighbor {peer_ip} route-map PREFER in\n"
+    return body + "!\n"
+
+
+def _cfg_bgp_aggregate(r, ifips, lo, routers, links, idx):
+    """eBGP; il primo router annuncia l'aggregato 10.255.0.0/16 summary-only al posto delle singole /32."""
+    asn = 65001 + idx
+    body = _head(r) + _ifaces(r, ifips, lo)
+    body += f"router bgp {asn}\n bgp router-id {lo[r]}\n no bgp ebgp-requires-policy\n"
+    body += f" network {lo[r]}/32\n"
+    if idx == 0:
+        body += " aggregate-address 10.255.0.0/16 summary-only\n"
+    for ifc in sorted(ifips[r]):
+        ip, pfx, net, peer_ip, peer = ifips[r][ifc]
+        body += f" neighbor {peer_ip} remote-as {65001 + routers.index(peer)}\n"
+    return body + "!\n"
+
+
 def _cfg_vrrp_gw(name, iface, lan_ip, vip, idx):
     body = _head(name)
     body += f"interface lo\n ip address 10.255.0.{idx + 1}/32\n!\n"
@@ -544,7 +605,7 @@ def dialect_of(tpl: Template) -> str | None:
 # topics that don't use a router dialect at all (switch + hosts)
 HOST_TOPICS = {"vlan", "mitm-arp", "recon-scan"}
 # topics for which we only have an FRR generator (feature not available / reliable on Cisco IOL/IOSv)
-FRR_ONLY_TOPICS = {"vxlan-evpn"}
+FRR_ONLY_TOPICS = {"vxlan-evpn", "ospf-cost", "ospf-default", "bgp-localpref", "bgp-aggregate"}
 # everything else that uses a router: we can write it in Cisco IOS too (IOL, IOSv, c7200/c3725, …)
 IOS_TOPICS = {t["id"] for t in TOPICS if t["id"] not in HOST_TOPICS and t["id"] not in FRR_ONLY_TOPICS}
 
@@ -903,7 +964,51 @@ STEPS = {
     "vxlan-evpn": (["Underlay: OSPF su spine e leaf per raggiungere le loopback.",
                     "Overlay: «router bgp 65000», «address-family l2vpn evpn»; i leaf fanno peer con gli spine (route-reflector). Sui leaf aggiungi «advertise-all-vni» e il VNI."],
                    ["«show bgp l2vpn evpn summary»", "«show evpn vni»"]),
+    "ospf-cost": (["Abilita OSPF area 0 su tutti i router (come lo scenario OSPF).",
+                   "Sul link fra i primi due router alza il costo: «interface <ifc>» → «ip ospf cost 100» su ENTRAMBE le estremità. Il traffico fra quei due router ora fa il giro dall'altro lato dell'anello."],
+                  ["«show ip ospf interface <ifc>» (Cost 100 sull'interfaccia modificata)",
+                   "«show ip route ospf»: il next-hop verso la loopback remota è cambiato",
+                   "«traceroute <loopback>» mostra il percorso più lungo lungo l'anello"]),
+    "ospf-default": (["Abilita OSPF area 0 su tutti i router.",
+                      "Sul primo router crea una default verso Null0 («ip route 0.0.0.0/0 Null0») e in «router ospf» aggiungi «default-information originate»."],
+                     ["sugli altri router «show ip route» mostra «O*E2 0.0.0.0/0» (gateway of last resort appreso)",
+                      "«show ip ospf database external» (LSA di tipo 5 per la default)"]),
+    "bgp-localpref": (["Configura eBGP (un AS per router) sull'anello: ogni router ha due uscite verso la stessa destinazione.",
+                       "Crea «route-map PREFER permit 10» con «set local-preference 200» e applicala in ingresso («neighbor <ip> route-map PREFER in») su UNO dei due vicini: quelle rotte diventano preferite."],
+                      ["«show ip bgp» (LocPrf = 200 sulle rotte preferite; il «>» indica la best-path)",
+                       "«show ip bgp <loopback-remota>»: confronta i due percorsi e vedi quale vince per local-preference"]),
+    "bgp-aggregate": (["Configura eBGP (un AS per router).",
+                       "Sul primo router, in «router bgp», aggiungi «aggregate-address 10.255.0.0/16 summary-only»: annuncia il blocco riassuntivo e nasconde le singole /32."],
+                      ["sui vicini «show ip bgp» mostra 10.255.0.0/16 e NON le /32 soppresse",
+                       "sul router che aggrega «show ip bgp 10.255.0.0/16» (riga «Aggregated by»)"]),
 }
+
+# per-topic troubleshooting hints added to every guide (plus the generic ones below)
+TROUBLE = {
+    "ospf": ["Adiacenza ferma in ExStart/Exchange? Di solito è un mismatch di MTU fra le interfacce.",
+             "Nessun vicino? Controlla che le interfacce siano nella stessa subnet e che non siano «passive» per sbaglio."],
+    "ospf-multiarea": ["Un ABR deve stare in area 0 E nell'area periferica: verifica le «network ... area N»."],
+    "ospf-auth": ["Adiacenza che non sale: le chiavi MD5 devono combaciare su entrambi i lati, stesso key-id."],
+    "ospf-cost": ["Il percorso non cambia? Il costo va alzato su ENTRAMBE le estremità del link per influenzare i due sensi di marcia."],
+    "ospf-default": ["Gli altri non vedono la default? Serve una rotta di default presente nel router che la origina (qui verso Null0)."],
+    "isis": ["Niente adiacenza: il NET deve avere la stessa area e il tipo di livello (level-2) deve combaciare."],
+    "eigrp": ["Vicini che vanno e vengono: AS diverso o K-values non allineati."],
+    "bgp-ebgp": ["Sessione Idle/Active? L'IP del neighbor e il «remote-as» devono combaciare ed essere raggiungibili.",
+                 "Rotte che non passano? In FRR serve «no bgp ebgp-requires-policy» oppure una route-map in/out."],
+    "bgp-ibgp": ["Sessione iBGP giù: le loopback usate come neighbor vanno raggiunte dall'IGP e serve «update-source lo».",
+                 "Rotte iBGP non installate: ricorda la regola del next-hop (spesso «next-hop-self» sui bordi)."],
+    "bgp-localpref": ["La local-preference conta solo DENTRO l'AS e batte quasi tutto: se la best-path non cambia, controlla dove hai applicato la route-map (in ingresso)."],
+    "bgp-aggregate": ["Aggregato assente: serve almeno una rotta più specifica nella tabella BGP perché l'aggregato venga generato."],
+    "mpls-ldp": ["Niente label? Verifica «mpls» abilitato sulle interfacce del core e che LDP veda i neighbor sulle loopback."],
+    "mpls-l3vpn": ["Rotte del cliente assenti nei PE: controlla rd/rt della VRF e che MP-BGP VPNv4 sia «activate» fra le loopback dei PE."],
+    "vrrp": ["Due master insieme? Gli host vedono flapping: priorità diverse e stessa VRID/stesso VIP sui due router."],
+}
+# always shown, whatever the topic
+TROUBLE_GENERIC = [
+    "Interfaccia su/giù: «show interface brief» (o «show ip interface brief») — deve risultare up/up e con l'IP giusto.",
+    "Router-id duplicati o mancanti rompono OSPF/BGP: qui ogni router usa la sua loopback come router-id univoco.",
+    "Dopo le modifiche salva con «do write» (o il pulsante «Salva config» di NetSO) per non perderle al riavvio.",
+]
 
 
 def _guide(topic: str, meta: dict, routers: list[str], ifips: dict, lo: dict, solution: dict,
@@ -922,6 +1027,9 @@ def _guide(topic: str, meta: dict, routers: list[str], ifips: dict, lo: dict, so
     out += [f"{i + 1}. {s}" for i, s in enumerate(steps)] or ["1. Configura il protocollo richiesto."]
     out += ["", "## Verifica"]
     out += [f"- {v}" for v in verify] or ["- Verifica le tabelle di routing e fai ping."]
+    out += ["", "## Troubleshooting"]
+    out += [f"- {t}" for t in TROUBLE.get(topic, [])]
+    out += [f"- {t}" for t in TROUBLE_GENERIC]
     out += ["", "## Soluzione",
             "La configurazione completa è anche nel set di config «soluzione» (menu Config nel lab). Qui sotto, per nodo:"]
     for r in routers:
@@ -1147,10 +1255,12 @@ def build(topic: str, templates: dict[str, Template], seed: int | None = None,
 
     # ---- router scenarios (IGP / BGP / MPLS / static / RIP)
     scn = _Scn(templates, router_tpl)
-    n = _clamp(count, rng.randint(3, 5), (4 if topic == "ospf-multiarea" else 2), 20)
+    min_n = 4 if topic == "ospf-multiarea" else 3 if topic in ("ospf-cost", "bgp-localpref") else 2
+    n = _clamp(count, rng.randint(3, 5), min_n, 20)
     # full mesh explodes with many nodes (N·(N-1)/2 links), so keep it only for small labs
     choices = ["ring", "chain"] + (["mesh"] if n <= 6 else [])
-    pattern = ({"static": "chain", "ospf-multiarea": "ring",
+    # path-selection labs need two paths between the ends, so force a ring
+    pattern = ({"static": "chain", "ospf-multiarea": "ring", "ospf-cost": "ring", "bgp-localpref": "ring",
                 "mpls-ldp": rng.choice(["ring", "chain"])}.get(topic) or rng.choice(choices))
     routers = _router_chain_or_ring(scn, rng, n, pattern)
     res = scn.result()
@@ -1189,7 +1299,9 @@ def build(topic: str, templates: dict[str, Template], seed: int | None = None,
               "ospf-auth": _cfg_ospf_auth, "bfd": _cfg_bfd, "redistribute": _cfg_redistribute,
               "bgp-security": _cfg_bgp_security, "bgp-communities": _cfg_bgp_comm,
               "route-filter": _cfg_route_filter, "bgp-rr": _cfg_bgp_rr, "pbr": _cfg_pbr,
-              "multicast": _cfg_pim, "bgp-hijack": _cfg_bgp_hijack}[topic]
+              "multicast": _cfg_pim, "bgp-hijack": _cfg_bgp_hijack,
+              "ospf-cost": _cfg_ospf_cost, "ospf-default": _cfg_ospf_default,
+              "bgp-localpref": _cfg_bgp_localpref, "bgp-aggregate": _cfg_bgp_aggregate}[topic]
         for i, r in enumerate(routers):
             solution[r] = fn(r, ifips, lo, routers, scn.links, i)
         base = _base_configs(routers, ifips, lo)

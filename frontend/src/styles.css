@@ -1310,3 +1310,30 @@ body:has(.drag-ghost) { cursor: grabbing !important; user-select: none; }
 .lv-badge.lv1 { background: #34d39922; color: #1a9f6e; }
 .lv-badge.lv2 { background: #f5a62322; color: #b9780f; }
 .lv-badge.lv3 { background: #e0526022; color: #c13a48; }
+
+/* «Genera lab»: ricerca + filtri + griglia di argomenti */
+.modal.gen-lab { max-height: 92vh; }
+.gen-lab > * { flex-shrink: 0; }            /* header, campi e footer restano fissi… */
+.gen-lab > .scn-grid { flex-shrink: 1; min-height: 90px; }  /* …solo la griglia scrolla */
+.gen-lab .scn-filters { display: flex; flex-direction: column; gap: 8px; margin: 10px 0 8px; }
+.scn-search { display: flex; align-items: center; gap: 7px; background: var(--sunken); border: 1px solid var(--line); border-radius: 9px; padding: 6px 9px; color: var(--muted); }
+.scn-search input { flex: 1; border: none; background: transparent; color: var(--text); outline: none; font-size: 13px; }
+.scn-clear { border: none; background: transparent; color: var(--muted); cursor: pointer; display: flex; padding: 2px; }
+.scn-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.scn-chip { border: 1px solid var(--line); background: var(--sunken); color: var(--muted); border-radius: 999px; padding: 3px 11px; font-size: 12px; cursor: pointer; transition: all .12s; }
+.scn-chip:hover { border-color: var(--line2); color: var(--text); }
+.scn-chip.on { background: var(--accent); border-color: var(--accent); color: #fff !important; }
+.scn-chip.lvl.on.lv1 { background: #1a9f6e; border-color: #1a9f6e; }
+.scn-chip.lvl.on.lv2 { background: #b9780f; border-color: #b9780f; }
+.scn-chip.lvl.on.lv3 { background: #c13a48; border-color: #c13a48; }
+.scn-sep { width: 1px; height: 18px; background: var(--line); margin: 0 2px; }
+.scn-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(215px, 1fr)); gap: 8px; max-height: 42vh; overflow: auto; padding: 2px; margin-bottom: 10px; }
+.scn-card { display: flex; flex-direction: column; gap: 3px; text-align: left; border: 1px solid var(--line); background: var(--sunken); border-radius: 11px; padding: 9px 11px; cursor: pointer; transition: all .12s; }
+.scn-card:hover { border-color: var(--line2); transform: translateY(-1px); }
+.scn-card.on { border-color: var(--accent); box-shadow: 0 0 0 2px #8b7bff44; background: color-mix(in srgb, var(--accent) 8%, var(--sunken)); }
+.scn-card .scn-top { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.scn-card .scn-top b, .scn-card.on .scn-top b { font-size: 13px; line-height: 1.25; color: var(--text) !important; }
+.scn-card .scn-cat, .scn-card.on .scn-cat { color: var(--muted) !important; font-size: 11px; }
+.scn-card .scn-desc, .scn-card.on .scn-desc { color: var(--muted) !important; font-size: 11.5px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.scn-badge.copia { background: #8b7bff22; color: var(--accent); font-size: 10px; font-weight: 600; padding: 1px 7px; border-radius: 6px; white-space: nowrap; }
+.scn-empty { grid-column: 1 / -1; text-align: center; padding: 22px 0; }

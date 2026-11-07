@@ -218,6 +218,9 @@ export function GenerateLabDialog({ folder, onClose, onError, onCreated }) {
   const [routers, setRouters] = useState([]) // installed routers we can generate configs for
   const [router, setRouter] = useState('')
   const [image, setImage] = useState('')     // '' = the template's default image
+  const [q, setQ] = useState('')             // argument search box
+  const [catFilter, setCatFilter] = useState('')  // '' = all categories
+  const [lvlFilter, setLvlFilter] = useState(0)   // 0 = all levels
   useEffect(() => { api('/scenarios').then((s) => { setScenarios(s); setScenario((v) => v || s[0]?.id || '') }).catch(() => {}) }, [])
   useEffect(() => {
     api('/templates').then((ts) => {
@@ -249,24 +252,45 @@ export function GenerateLabDialog({ folder, onClose, onError, onCreated }) {
       } })).name)
     } catch (err) { onError(err) }
   }
+  const lc = (x) => (x || '').toLowerCase()
+  const filtered = scenarios.filter((s) =>
+    (!catFilter || s.cat === catFilter) &&
+    (!lvlFilter || s.custom || s.level === lvlFilter) &&
+    (!q || lc(`${s.label} ${s.desc} ${s.cat}`).includes(lc(q))))
   return (
     <div className="modal-bg" onClick={onClose}>
-      <form className="modal wide" onClick={(e) => e.stopPropagation()} onSubmit={go}>
+      <form className="modal wide gen-lab" onClick={(e) => e.stopPropagation()} onSubmit={go}>
         <ModalHead icon="links" title="Genera lab" sub="Un lab pronto per argomento, con guida, config e indirizzi IP già impostati" onClose={onClose} />
-        <div className="grid2">
-          <label className="field"><span>Nome del lab</span><input autoFocus required pattern="[A-Za-z][A-Za-z0-9 _\-]{0,47}" value={name}
-            onChange={(e) => setName(e.target.value)} placeholder="es. OSPF 1" title="Inizia con una lettera; lettere, numeri, spazi, _ e - (max 48)" /></label>
-          {!cur?.custom && <label className="field"><span>Numero di nodi (2–20)</span><input type="number" min="2" max="20" value={count} onChange={(e) => setCount(e.target.value)} /></label>}
+        <label className="field"><span>Nome del lab</span><input autoFocus required pattern="[A-Za-z][A-Za-z0-9 _\-]{0,47}" value={name}
+          onChange={(e) => setName(e.target.value)} placeholder="es. OSPF 1" title="Inizia con una lettera; lettere, numeri, spazi, _ e - (max 48)" /></label>
+
+        <div className="scn-filters">
+          <div className="scn-search"><Ui name="search" size={14} />
+            <input placeholder="Cerca un argomento (es. BGP, OSPF, VLAN…)" value={q} onChange={(e) => setQ(e.target.value)} />
+            {q && <button type="button" className="scn-clear" title="Pulisci" onClick={() => setQ('')}><Ui name="close" size={13} /></button>}
+          </div>
+          <div className="scn-chips">
+            <button type="button" className={`scn-chip ${!catFilter ? 'on' : ''}`} onClick={() => setCatFilter('')}>Tutti</button>
+            {cats.map((c) => <button type="button" key={c} className={`scn-chip ${catFilter === c ? 'on' : ''}`} onClick={() => setCatFilter(catFilter === c ? '' : c)}>{c}</button>)}
+            <span className="scn-sep" />
+            {[1, 2, 3].map((lv) => <button type="button" key={lv} className={`scn-chip lvl ${LVL[lv][1]} ${lvlFilter === lv ? 'on' : ''}`} onClick={() => setLvlFilter(lvlFilter === lv ? 0 : lv)}>{LVL[lv][0]}</button>)}
+          </div>
         </div>
+
+        <div className="scn-grid">
+          {filtered.map((s) => (
+            <button type="button" key={s.id} className={`scn-card ${scenario === s.id ? 'on' : ''}`} onClick={() => setScenario(s.id)} title={s.desc}>
+              <span className="scn-top"><b>{s.label}</b>
+                {s.custom ? <span className="scn-badge copia">copia pronta</span> : <span className={`lv-badge ${LVL[s.level]?.[1]}`}>{LVL[s.level]?.[0]}</span>}</span>
+              <small className="scn-cat">{s.cat}</small>
+              <span className="scn-desc">{s.desc}</span>
+            </button>
+          ))}
+          {!filtered.length && <p className="muted scn-empty">Nessun argomento trovato. Prova a cambiare la ricerca o i filtri.</p>}
+        </div>
+
         <div className="grid2">
-          <label className="field"><span>Argomento</span>
-            <select value={scenario} onChange={(e) => setScenario(e.target.value)} required>
-              {cats.map((c) => (
-                <optgroup key={c} label={c}>
-                  {scenarios.filter((s) => s.cat === c).map((s) => <option key={s.id} value={s.id}>{s.label}{s.custom ? '' : ` · ${LVL[s.level]?.[0] || ''}`}</option>)}
-                </optgroup>
-              ))}
-            </select></label>
+          {!cur?.custom && <label className="field"><span>Numero di nodi (2–20)</span><input type="number" min="2" max="20" value={count} onChange={(e) => setCount(e.target.value)} /></label>}
           {pickRouter && <label className="field"><span>Router (nodi installati)</span>
             {routers.length ? (
               <select value={router} onChange={(e) => setRouter(e.target.value)}>
@@ -274,14 +298,15 @@ export function GenerateLabDialog({ folder, onClose, onError, onCreated }) {
               </select>
             ) : <input value="Nessun router installato" disabled />}
           </label>}
+          {pickRouter && imgs.length > 0 && (
+            <label className="field"><span>Immagine del router</span>
+              <select value={image} onChange={(e) => setImage(e.target.value)}>
+                <option value="">{rtpl?.image || 'predefinita'} · predefinita</option>
+                {imgs.filter((i) => i !== rtpl?.image).map((i) => <option key={i} value={i}>{i}</option>)}
+              </select></label>
+          )}
         </div>
-        {pickRouter && imgs.length > 0 && (
-          <label className="field"><span>Immagine del router</span>
-            <select value={image} onChange={(e) => setImage(e.target.value)}>
-              <option value="">{rtpl?.image || 'predefinita'} · predefinita</option>
-              {imgs.filter((i) => i !== rtpl?.image).map((i) => <option key={i} value={i}>{i}</option>)}
-            </select></label>
-        )}
+
         {cur?.custom && <p className="hint">{cur.desc} <b>Copia pronta del lab (topologia e config iniziali già impostate).</b></p>}
         {cur && !cur.custom && !incompat && <p className="hint">
           <span className={`lv-badge ${LVL[cur.level]?.[1]}`}>{LVL[cur.level]?.[0]}</span> {cur.desc}
@@ -291,7 +316,7 @@ export function GenerateLabDialog({ folder, onClose, onError, onCreated }) {
           ⚠ «{cur.label}» si genera solo con <b>FRR</b> (funzione non affidabile su Cisco IOL/IOSv). Scegli FRR come router per questo argomento.
         </p>}
         <div className="row-end">
-          <span className="muted small grow">Lab di <b>{cur?.label}</b>{cur?.custom ? ' · copia pronta' : ` · ${count} nodi · topologia casuale`}</span>
+          <span className="muted small grow">{cur ? <>Lab di <b>{cur.label}</b>{cur.custom ? ' · copia pronta' : ` · ${count} nodi · topologia casuale`}</> : `${filtered.length} argomenti disponibili`}</span>
           <button type="button" className="ghost" onClick={onClose}>Annulla</button>
           <button className="primary" type="submit" disabled={!name || !scenario || incompat}><Ui name="links" size={15} /> Genera lab</button>
         </div>
