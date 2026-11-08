@@ -101,7 +101,8 @@ def _err(exc: Exception) -> HTTPException:
                         catalog.CatalogError, imgs.ImageError, dockerimg.DockerImageError, icons_mod.IconError,
                         agents_mod.AgentError, diagnostics.DiagError, automation.GenerateError, srv.ServerError, ValueError)):
         return HTTPException(400, str(exc))
-    return HTTPException(500, str(exc))
+    # unexpected: never return an empty body (the UI would just show «Internal Server Error»)
+    return HTTPException(500, str(exc) or f"{type(exc).__name__}: errore interno")
 
 
 def _lab_summary(name: str, folders: dict[str, str]) -> dict:
@@ -1013,19 +1014,24 @@ def generate_lab(body: GenLab, request: Request):
             spec = automation.generate(lab, topo.load_templates(), body.pattern, body.params)
             lab.nodes = [Node(**n) for n in spec["nodes"]]
             lab.links = [Link(**ln) for ln in spec["links"]]
-    except Exception as exc:
-        raise _err(exc)
-    lab.author = body.author or (user if user and user != "api" else "")
-    acl.set_owner(lab.name, user if user and user != "api" else "admin")
-    try:
+        lab.author = body.author or (user if user and user != "api" else "")
+        acl.set_owner(lab.name, user if user and user != "api" else "admin")
         lib.set_lab_folder(lab.name, body.folder)
+        topo.save_lab(lab)
+        # node names in the lab (so a stray config file from an old import can't 500 the request)
+        valid = {n.name for n in lab.nodes}
+        for node, text in configs.items():
+            if node in valid:
+                topo.write_config(lab.name, lab.config_set, node, text)
+        for node, text in solution.items():
+            if node in valid:
+                topo.write_config(lab.name, "soluzione", node, text)
+    except HTTPException:
+        topo.delete_lab(body.name)
+        raise
     except Exception as exc:
+        topo.delete_lab(body.name)
         raise _err(exc)
-    topo.save_lab(lab)
-    for node, text in configs.items():
-        topo.write_config(lab.name, lab.config_set, node, text)
-    for node, text in solution.items():
-        topo.write_config(lab.name, "soluzione", node, text)
     return lab
 
 
