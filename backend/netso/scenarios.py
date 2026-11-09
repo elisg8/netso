@@ -404,13 +404,21 @@ def _cfg_vrrp_gw(name, iface, lan_ip, vip, idx):
     return body
 
 
-def _pe_vrf(pe_lo, peer_lo, idx):
-    """VRF + MP-BGP VPNv4 part of a PE (added after its core MPLS/LDP config)."""
+def _pe_vrf(pe_lo, peer_los, idx):
+    """VRF + MP-BGP VPNv4 part of a PE (added after its core MPLS/LDP config).
+    `peer_los` is the loopback of every other PE (iBGP VPNv4 full mesh)."""
+    if isinstance(peer_los, str):
+        peer_los = [peer_los]
     cust = f"172.16.{idx + 1}.1"
     body = "vrf CUST\n exit-vrf\n!\n"
     body += f"interface lo-cust vrf CUST\n ip address {cust}/32\n!\n"
-    body += (f"router bgp 65000\n bgp router-id {pe_lo}\n neighbor {peer_lo} remote-as 65000\n"
-             f" neighbor {peer_lo} update-source lo\n address-family ipv4 vpn\n  neighbor {peer_lo} activate\n exit-address-family\n!\n")
+    body += f"router bgp 65000\n bgp router-id {pe_lo}\n"
+    for peer in peer_los:
+        body += f" neighbor {peer} remote-as 65000\n neighbor {peer} update-source lo\n"
+    body += " address-family ipv4 vpn\n"
+    for peer in peer_los:
+        body += f"  neighbor {peer} activate\n"
+    body += " exit-address-family\n!\n"
     body += (f"router bgp 65000 vrf CUST\n address-family ipv4 unicast\n  rd vpn export 65000:{idx + 1}\n"
              "  rt vpn both 65000:100\n  redistribute connected\n  label vpn export auto\n"
              "  export vpn\n  import vpn\n exit-address-family\n!\n")
@@ -1016,15 +1024,22 @@ def _ios_bgp_hijack(r, ifips, lo, routers, links, idx):
     return body + "!\n"
 
 
-def _ios_pe_vrf(pe_lo, peer_lo, idx):
-    """VRF + MP-BGP VPNv4 part of an IOS PE (added after its core MPLS/LDP config)."""
+def _ios_pe_vrf(pe_lo, peer_los, idx):
+    """VRF + MP-BGP VPNv4 part of an IOS PE (added after its core MPLS/LDP config).
+    `peer_los` is the loopback of every other PE (iBGP VPNv4 full mesh)."""
+    if isinstance(peer_los, str):
+        peer_los = [peer_los]
     cust = f"172.16.{idx + 1}.1"
     body = (f"vrf definition CUST\n rd 65000:{idx + 1}\n address-family ipv4\n"
             "  route-target export 65000:100\n  route-target import 65000:100\n exit-address-family\n!\n")
     body += f"interface Loopback1\n vrf forwarding CUST\n ip address {cust} 255.255.255.255\n!\n"
-    body += (f"router bgp 65000\n bgp router-id {pe_lo}\n bgp log-neighbor-changes\n"
-             f" neighbor {peer_lo} remote-as 65000\n neighbor {peer_lo} update-source Loopback0\n"
-             f" address-family vpnv4\n  neighbor {peer_lo} activate\n  neighbor {peer_lo} send-community extended\n exit-address-family\n"
+    body += f"router bgp 65000\n bgp router-id {pe_lo}\n bgp log-neighbor-changes\n"
+    for peer in peer_los:
+        body += f" neighbor {peer} remote-as 65000\n neighbor {peer} update-source Loopback0\n"
+    body += " address-family vpnv4\n"
+    for peer in peer_los:
+        body += f"  neighbor {peer} activate\n  neighbor {peer} send-community extended\n"
+    body += (" exit-address-family\n"
              " address-family ipv4 vrf CUST\n  redistribute connected\n exit-address-family\n!\n")
     return body
 
@@ -1483,35 +1498,45 @@ def build(topic: str, templates: dict[str, Template], seed: int | None = None,
                  "\n\n## Soluzione\n" + "".join(f"\n### {g}\n```\n{solution[g].strip()}\n```\n" for g in gws))
         return _finish("vrrp", desc, res, base, solution, instr)
 
-    # ---- MPLS L3VPN: PE1 - P - PE2 core with per-PE VRF and MP-BGP VPNv4
+    # ---- MPLS L3VPN: a P core (OSPF+LDP) with PE edges (VRF CUST + MP-BGP VPNv4 full mesh)
     if topic == "mpls-l3vpn":
+        n = _clamp(count, rng.randint(5, 8), 3, 20)
+        ncore = max(1, round(n / 3))          # ~1/3 transit P routers, the rest PE
+        npe = max(2, n - ncore)
+        ncore = max(1, n - npe)               # keep the total == n after the PE floor
         scn = _Scn(templates, router_tpl)
-        pes = scn.add("pe", router_tpl, 2, [(150, 300), (690, 300)])
-        p = scn.add("p", router_tpl, 1, [(420, 300)])[0]
-        pe1, pe2 = pes
-        scn.link(pe1, p)
-        scn.link(p, pe2)
-        names = [pe1, p, pe2]
+        core = scn.add("p", router_tpl, ncore,
+                       _circle(ncore, 420, 340, 130) if ncore > 1 else [(420, 340)])
+        pes = scn.add("pe", router_tpl, npe, _circle(npe, 420, 340, 320))
+        # core: ring when 3+, single wire when 2 (always connected)
+        if ncore >= 3:
+            for i in range(ncore):
+                scn.link(core[i], core[(i + 1) % ncore])
+        elif ncore == 2:
+            scn.link(core[0], core[1])
+        # each PE hangs off one core router (round-robin) → the graph is always connected
+        for j, pe in enumerate(pes):
+            scn.link(pe, core[j % ncore])
+        names = core + pes
         res = scn.result()
         lo, ifips = _address(names, scn.links)
         _label_links(res, scn.links)
-        if dia == "ios":
-            solution = {
-                p: _ios_mpls_ldp(p, ifips, lo, names, scn.links, 1),
-                pe1: _ios_mpls_ldp(pe1, ifips, lo, names, scn.links, 0) + _ios_pe_vrf(lo[pe1], lo[pe2], 0),
-                pe2: _ios_mpls_ldp(pe2, ifips, lo, names, scn.links, 2) + _ios_pe_vrf(lo[pe2], lo[pe1], 1),
-            }
-            base = _base_configs_ios(names, ifips, lo)
-        else:
-            solution = {
-                p: _cfg_mpls_ldp(p, ifips, lo, names, scn.links, 1),
-                pe1: _cfg_mpls_ldp(pe1, ifips, lo, names, scn.links, 0) + _pe_vrf(lo[pe1], lo[pe2], 0),
-                pe2: _cfg_mpls_ldp(pe2, ifips, lo, names, scn.links, 2) + _pe_vrf(lo[pe2], lo[pe1], 1),
-            }
-            base = _base_configs(names, ifips, lo)
-        desc = f"MPLS L3VPN: {pe1} - {p} - {pe2}, core OSPF+LDP, VRF CUST e MP-BGP VPNv4 fra i PE ({rlabel})."
+        cfg_core = _ios_mpls_ldp if dia == "ios" else _cfg_mpls_ldp
+        pe_vrf = _ios_pe_vrf if dia == "ios" else _pe_vrf
+        pe_los = [lo[pe] for pe in pes]
+        solution = {}
+        for r in core:
+            solution[r] = cfg_core(r, ifips, lo, names, scn.links, names.index(r))
+        for j, pe in enumerate(pes):
+            peers = [l for l in pe_los if l != lo[pe]]      # iBGP VPNv4 full mesh
+            solution[pe] = cfg_core(pe, ifips, lo, names, scn.links, names.index(pe)) + pe_vrf(lo[pe], peers, j)
+        base = _base_configs_ios(names, ifips, lo) if dia == "ios" else _base_configs(names, ifips, lo)
+        desc = (f"MPLS L3VPN: core di {ncore} router P (OSPF+LDP) e {npe} PE con VRF CUST "
+                f"e MP-BGP VPNv4 in full mesh ({rlabel}).")
         instr = _guide("mpls-l3vpn", meta, names, ifips, lo, solution,
-                       intro="Il P è solo transito MPLS; i PE hanno la VRF del cliente.", router_label=rlabel)
+                       pattern=f"core di {ncore} P + {npe} PE",
+                       intro="I router P fanno solo transito MPLS; i PE hanno la VRF del cliente e si scambiano "
+                             "le rotte VPNv4 in full mesh.", router_label=rlabel)
         return _finish("mpls-l3vpn", desc, res, base, solution, instr)
 
     # ---- Hacking: MITM / ARP spoofing on a shared LAN (topology + guide, host-based)
