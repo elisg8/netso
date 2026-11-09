@@ -18,8 +18,8 @@ from .models import Lab, Link, Node, Template
 # configs are hand-typed with IOS abbreviations (int g0/2, ip addr, Host R1) and CRLF
 _DEV = re.compile(r"-{3,}\s*On\s+(\S+)", re.I)
 _IFACE = re.compile(r"^\s*int[a-z]*\s+(\S+)", re.I)          # int / inte / interface
-_IP = re.compile(r"^\s*ip\s+addr[a-z]*\s+(\d+\.\d+\.\d+\.\d+)\s+(\d+\.\d+\.\d+\.\d+)", re.I)  # ip addr / ip address
-_IP6 = re.compile(r"^\s*ipv6\s+addr[a-z]*\s+([0-9A-Fa-f:]+)/(\d+)", re.I)  # ipv6 addr 12::1/64
+_IP = re.compile(r"^\s*ip\s+add?(?:r[a-z]*)?\s+(\d+\.\d+\.\d+\.\d+)\s+(\d+\.\d+\.\d+\.\d+)", re.I)  # ip ad / add / addr / address
+_IP6 = re.compile(r"^\s*ipv6\s+add?(?:r[a-z]*)?\s+([0-9A-Fa-f:]+)/(\d+)", re.I)  # ipv6 ad / add / addr 12::1/64
 _DROP = re.compile(r"^\s*(en(able)?|conf(ig)?\s+t(erminal)?|end)\s*$", re.I)
 
 
@@ -178,6 +178,53 @@ def convert(name: str, text: str, templates: dict[str, Template], router: str = 
     def _ports(d):
         return [_port(i) for i in {**devs[d]["ifaces"], **devs[d]["ifaces6"]} if _is_phys(i)]
     nic_need = {d: max(_ports(d), default=0) + 1 for d in routers}
+
+    # Safety net: a lab must never ship with an unreachable node. Subnet inference can
+    # strand a device when its real link runs through an L2 switch that carries no IP, or
+    # when the peer address wasn't in the paste. Stitch every orphan piece to the main
+    # topology's hub with an extra L1 link (the addresses won't match — the student
+    # re-addresses it) so «Genera lab» always produces a connected lab.
+    adj: dict[str, set] = {}
+    deg: dict[str, int] = {}
+    for lk in links:
+        a, b = (e.split(":")[0] for e in lk.endpoints)
+        adj.setdefault(a, set()).add(b)
+        adj.setdefault(b, set()).add(a)
+        deg[a] = deg.get(a, 0) + 1
+        deg[b] = deg.get(b, 0) + 1
+    seen: set = set()
+    comps: list[set] = []
+    for s in set(routers) | set(bridges):
+        if s in seen:
+            continue
+        stack, comp = [s], set()
+        while stack:
+            x = stack.pop()
+            if x in seen:
+                continue
+            seen.add(x)
+            comp.add(x)
+            stack += [y for y in adj.get(x, ()) if y not in seen]
+        comps.append(comp)
+    if len(comps) > 1:
+        def _anchor(comp: set) -> str:            # best-connected router, else any node
+            pool = [d for d in comp if d in routers] or list(comp)
+            return max(pool, key=lambda d: deg.get(d, 0))
+
+        def _free(d: str) -> str:                 # next spare NIC on a router, bumping its count
+            p = nic_need[d]
+            nic_need[d] = p + 1
+            return f"{prefix}{start + p}"
+
+        main = max(comps, key=len)
+        hub = _anchor(main)
+        for comp in comps:
+            if comp is main:
+                continue
+            u = _anchor(comp)
+            if u in routers and hub in routers:   # only stitch real routers (lone switches stay as-is)
+                links.append(Link(endpoints=[f"{u}:{_free(u)}", f"{hub}:{_free(hub)}"],
+                                  style="dashed", label="aggiunto da NetSO · reindirizza"))
 
     # layout: routers on a circle, bridges in the middle
     n = len(routers)
