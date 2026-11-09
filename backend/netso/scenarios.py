@@ -583,35 +583,113 @@ def _router_chain_or_ring(scn: _Scn, rng: random.Random, n: int, pattern: str) -
     return rs
 
 
-def _realistic_topology(scn: _Scn, rng: random.Random, n: int) -> list[str]:
+def _realistic_topology(scn: _Scn, rng: random.Random, n: int, cores: int | None = None) -> list[str]:
     """A real-world shape instead of a line/ring: a small redundant core with branch/access routers
-    hanging off it (some dual-homed), drawn as a core in the middle with the sites around it."""
-    c = 1 if n <= 1 else 2 if n <= 4 else 3 if n <= 9 else 4
-    c = min(c, n)
-    cx, cy = 480, 340
+    hanging off it (some dual-homed), drawn as a core in the middle with the sites around it.
+    Randomised (core size, homing, dual-homing, back-door links, positions) so no two labs look alike."""
+    if cores is None:
+        cores = 1 if n <= 2 else rng.randint(2, 3) if n <= 7 else rng.randint(3, 4)
+    c = max(1, min(cores, n - 1 if n > 1 else 1, 4))
+    cx, cy = 480, 350
+    jig = lambda r: rng.uniform(-r, r)
     pos: list[tuple[float, float]] = [(cx, cy)] * n
+    base = rng.uniform(0, 2 * math.pi)                  # whole picture is rotated a bit each time
     for i in range(c):                                  # core cluster near the centre
-        ang = 2 * math.pi * i / c - math.pi / 2
-        pos[i] = (cx + (0 if c == 1 else 175) * math.cos(ang), cy + (0 if c == 1 else 125) * math.sin(ang))
+        ang = base + 2 * math.pi * i / c
+        rr = 0 if c == 1 else 150
+        pos[i] = (cx + rr * math.cos(ang) + jig(18), cy + rr * 0.7 * math.sin(ang) + jig(18))
     acc = list(range(c, n))                             # access / branch routers on an ellipse around the core
-    rx, ry = max(420, len(acc) * 46), max(300, len(acc) * 32)
+    rx, ry = max(400, len(acc) * 44), max(280, len(acc) * 30)
+    a0 = rng.uniform(0, 2 * math.pi)
     for k, idx in enumerate(acc):
-        ang = 2 * math.pi * k / max(1, len(acc)) - math.pi / 2
-        pos[idx] = (cx + rx * math.cos(ang), cy + ry * math.sin(ang))
+        ang = a0 + 2 * math.pi * k / max(1, len(acc))
+        pos[idx] = (cx + rx * math.cos(ang) + jig(24), cy + ry * math.sin(ang) + jig(24))
     rs = scn.add("r", scn.router, n, pos)
     if c == 2:                                          # core interconnect: redundant among the cores
         scn.link(rs[0], rs[1])
     elif c >= 3:
         for i in range(c):
             scn.link(rs[i], rs[(i + 1) % c])            # ring (triangle for 3)
-        if c >= 4:
+        if c >= 4 and rng.random() < 0.6:
             scn.link(rs[0], rs[2])                      # + a diagonal → partial mesh
-    for k, idx in enumerate(acc):                       # each site homes to the nearest core…
-        primary = round(k / max(1, len(acc)) * c) % c if c else 0
+    for idx in acc:                                     # each site homes to a (random) core…
+        primary = rng.randrange(c)
         scn.link(rs[idx], rs[primary])
-        if c >= 2 and k % 2 == 1:                       # …and ~every other one is dual-homed for redundancy
-            scn.link(rs[idx], rs[(primary + 1) % c])
+        if c >= 2 and rng.random() < 0.55:              # …and about half are dual-homed for redundancy
+            scn.link(rs[idx], rs[rng.choice([x for x in range(c) if x != primary])])
+    if len(acc) >= 2 and rng.random() < 0.35:           # once in a while a back-door link between two sites
+        a, b = rng.sample(acc, 2)
+        scn.link(rs[a], rs[b])
     return rs
+
+
+def _twotier_topology(scn: _Scn, rng: random.Random, n: int) -> list[str]:
+    """Three tiers (core → distribution → access): a 2-router core, a distribution row linked to both
+    cores, and access routers under the distribution. Always fully connected."""
+    core_n = 2
+    d = max(1, min(rng.randint(2, 3), n - core_n - 1))
+    a = n - core_n - d
+    pos: list[tuple[float, float]] = []
+    for i in range(core_n):                             # core row (top)
+        pos.append((400 + i * 220 + rng.uniform(-15, 15), 150 + rng.uniform(-12, 12)))
+    for j in range(d):                                  # distribution row (middle)
+        x = 180 + j * (620 / max(1, d - 1)) if d > 1 else 510
+        pos.append((x + rng.uniform(-18, 18), 360 + rng.uniform(-12, 12)))
+    for k in range(a):                                  # access row (bottom)
+        x = 150 + k * (680 / max(1, a - 1)) if a > 1 else 510
+        pos.append((x + rng.uniform(-18, 18), 560 + rng.uniform(-12, 12)))
+    rs = scn.add("r", scn.router, n, pos)
+    core, dists, accs = rs[:core_n], rs[core_n:core_n + d], rs[core_n + d:]
+    scn.link(core[0], core[1])
+    for dd in dists:                                    # every distribution router to both cores
+        scn.link(dd, core[0])
+        scn.link(dd, core[1])
+    for aa in accs:                                     # each access router to a distribution one
+        scn.link(aa, dists[rng.randrange(d)])
+        if d >= 2 and rng.random() < 0.4:
+            scn.link(aa, dists[rng.randrange(d)])
+    return rs
+
+
+def _mesh_topology(scn: _Scn, rng: random.Random, n: int) -> list[str]:
+    """A partial mesh: a ring (guarantees connectivity) plus a handful of random chords."""
+    cx, cy = 480, 360
+    R = max(220, n * 26)
+    base = rng.uniform(0, 2 * math.pi)
+    pos = [(cx + R * math.cos(base + 2 * math.pi * i / n), cy + R * 0.78 * math.sin(base + 2 * math.pi * i / n))
+           for i in range(n)]
+    rs = scn.add("r", scn.router, n, pos)
+    seen = set()
+    for i in range(n):                                  # ring → connected
+        scn.link(rs[i], rs[(i + 1) % n])
+        seen |= {(i, (i + 1) % n), ((i + 1) % n, i)}
+    chords, tries = rng.randint(max(1, n // 3), max(2, n // 2)), 0
+    while chords > 0 and tries < 60:
+        tries += 1
+        a, b = rng.sample(range(n), 2)
+        if (a, b) in seen:
+            continue
+        scn.link(rs[a], rs[b])
+        seen |= {(a, b), (b, a)}
+        chords -= 1
+    return rs
+
+
+def _varied_topology(scn: _Scn, rng: random.Random, n: int) -> tuple[list[str], str]:
+    """Pick a random real-world shape (always fully connected) so each generated lab looks different."""
+    choices = ["core"]
+    if n >= 4:
+        choices += ["mesh", "dualhub"]
+    if n >= 5:
+        choices += ["twotier"]
+    style = rng.choice(choices)
+    if style == "twotier":
+        return _twotier_topology(scn, rng, n), "due livelli (core + distribuzione + accesso)"
+    if style == "mesh":
+        return _mesh_topology(scn, rng, n), "maglia parziale"
+    if style == "dualhub":
+        return _realistic_topology(scn, rng, n, cores=2), "doppio core + rami"
+    return _realistic_topology(scn, rng, n), "core ridondante + rami"
 
 
 def _dualpath_topology(scn: _Scn, rng: random.Random, n: int) -> list[str]:
@@ -1483,8 +1561,7 @@ def build(topic: str, templates: dict[str, Template], seed: int | None = None,
     if topic in ("ipv6-ospf", "ipv6-bgp"):
         scn = _Scn(templates, router_tpl)
         n = _clamp(count, rng.randint(4, 6), 2, 20)
-        pattern = "core ridondante + rami"
-        routers = _realistic_topology(scn, rng, n)
+        routers, pattern = _varied_topology(scn, rng, n)
         res = scn.result()
         lo6, if6 = _address6(routers, scn.links)
         for k, ln in enumerate(res["links"]):
@@ -1511,9 +1588,8 @@ def build(topic: str, templates: dict[str, Template], seed: int | None = None,
     elif topic == "ospf-multiarea":                  # backbone (area 0) + peripheral areas, on a ring
         pattern = "anello multiarea"
         routers = _router_chain_or_ring(scn, rng, n, "ring")
-    else:                                            # real-world shape: redundant core + branch sites
-        pattern = "core ridondante + rami"
-        routers = _realistic_topology(scn, rng, n)
+    else:                                            # real-world shape, varied each time (always connected)
+        routers, pattern = _varied_topology(scn, rng, n)
     res = scn.result()
     lo, ifips = _address(routers, scn.links)
 
