@@ -1,0 +1,20 @@
+name: cisco-ftd
+title: Cisco Secure Firewall (FTDv)
+kind: qemu
+description: Cisco Firepower Threat Defense Virtual (FTDv). Immagine Cisco, non inclusa.
+icon: firewall
+image: cisco-ftd
+cpus: 4
+ram: 8192
+nics: 8
+nic_model: virtio-net-pci
+disk_bus: virtio
+console: telnet
+iface_prefix: Gi
+iface_start: 0
+# FTDv è basato su FreeBSD: sotto KVM va in kernel panic ("Host injected async #PF
+# in kernel mode") perché il guest non gestisce gli async page-fault paravirtuali.
+# Disabilitandoli nella CPU QEMU la VM avvia. Vale anche per pfSense/OPNsense.
+cpu_model: host,-kvm-asyncpf,-kvm-asyncpf-int
+config_method: none
+ansible_os: cisco.ftd.ftd
