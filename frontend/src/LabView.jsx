@@ -64,7 +64,7 @@ function DeviceNode({ data, selected }) {
   const stLabel = running ? 'in esecuzione' : st === 'error' ? 'errore' : 'fermo'
   return (
     <div className={`devnode ${selected ? 'sel' : ''} st-${st} ${classic ? 'classic' : ''} ${data.pending ? `pend-${data.pending}` : ''}`}
-      title={data.error || data.description || ''} style={{ '--k': k, width: Math.max(86, 58 * k + 28) }}
+      title={data.error || data.description || data.name} style={{ '--k': k, width: Math.max(86, 58 * k + 28) }}
       onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
       {/* quick actions at hover / when selected: start-stop, console, edit */}
       <NodeToolbar isVisible={(hover || selected) && !act.multi} position={Position.Top} offset={10}>
@@ -229,6 +229,7 @@ const PORT_TITLE = { up: 'acceso', down: 'spento', err: 'errore', wait: 'in avvi
 function CenterEdge({ id, source, target, data, selected, interactionWidth }) {
   const s = useInternalNode(source)
   const t = useInternalNode(target)
+  const [hv, setHv] = useState(false)
   if (!s || !t) return null
   const half = (n) => CHIP_HALF * (n.data?.size || 100) / 100
   const c = (n) => [n.internals.positionAbsolute.x + (n.measured?.width || 0) / 2, n.internals.positionAbsolute.y + half(n)]
@@ -240,8 +241,7 @@ function CenterEdge({ id, source, target, data, selected, interactionWidth }) {
     const k = data.offset * (source < target ? 1 : -1)
     sx -= uy * k; sy += ux * k; tx -= uy * k; ty += ux * k
   }
-  // stop the cable at each icon's edge: line-style chips are transparent, so a centre-to-centre
-  // cable would be drawn straight across the icon. Pull each end in to where its port sits.
+  // pull each end in to the icon's edge so the cable touches the glyph, not its centre
   let px = sx, py = sy, qx = tx, qy = ty
   const seg = Math.hypot(tx - sx, ty - sy) || 1
   const inS = half(s) - 6, inT = half(t) - 6
@@ -251,9 +251,9 @@ function CenterEdge({ id, source, target, data, selected, interactionWidth }) {
     qx = tx - ex * inT; qy = ty - ey * inT
   }
   const g = linkGeometry(px, py, qx, qy, data.shape, 46, data.bend)
-  // an ethernet port with a status LED at both ends of the cable, sitting ON the icon's edge (not floating)
+  // an ethernet port with a status LED at both ends of the cable, sitting ON the icon's edge
   const ports = [[sx, sy, g.dirs[0], data.aSt, data.a, half(s)], [tx, ty, g.dirs[1], data.bSt, data.b, half(t)]].map(([x, y, d, st, ifc, h]) => {
-    const [px, py] = portPoint(x, y, d, h - 7) // pull it in to the glyph edge so there is no gap
+    const [px, py] = portPoint(x, y, d, h - 7)
     return { px, py, ang: Math.atan2(d[1], d[0]) * 180 / Math.PI, st: portState(st), ifc }
   })
   const bothUp = ports.every((p) => p.st === 'up')
@@ -265,12 +265,16 @@ function CenterEdge({ id, source, target, data, selected, interactionWidth }) {
     strokeDasharray: linkDash(data.style, w), strokeLinecap: data.style === 'dotted' ? 'round' : undefined,
   }
   const long = g.len > 150
-  const labels = long ? [[...g.ends[0], data.a], [...g.ends[1], data.b]] : [[mx, my, `${data.a} ⟷ ${data.b}`]]
+  const ifaceLabels = long ? [[...g.ends[0], data.a], [...g.ends[1], data.b]] : [[mx, my, `${data.a} ⟷ ${data.b}`]]
+  const showIface = data.ifaceMode !== 'hover' || hv || selected
   const extra = [data.label && ['name', data.label], data.cap && ['capb', '● cattura'], data.cond && long && ['cond', `⏱ ${data.cond}`]].filter(Boolean)
   return (
     <>
       {selected && <path d={g.path} className="edge-halo" style={{ strokeWidth: w + 9 }} />}
       <BaseEdge id={id} path={g.path} interactionWidth={interactionWidth} style={style} />
+      <path d={g.path} fill="none" stroke="transparent" strokeWidth={Math.max(16, w + 12)}
+        style={{ pointerEvents: 'stroke', cursor: 'pointer' }}
+        onMouseEnter={() => setHv(true)} onMouseLeave={() => setHv(false)} />
       {ports.map((p, i) => (
         <g key={i} className={`port st-${p.st} ${bothUp ? 'live' : ''}`} transform={`translate(${p.px} ${p.py}) rotate(${p.ang})`}>
           <title>{`${p.ifc}: ${PORT_TITLE[p.st]}`}</title>
@@ -281,8 +285,8 @@ function CenterEdge({ id, source, target, data, selected, interactionWidth }) {
         </g>
       ))}
       <EdgeLabelRenderer>
-        {labels.map(([x, y, txt], i) => (
-          <div key={i} className={`elabel ${selected ? 'sel' : ''}`}
+        {showIface && ifaceLabels.map(([x, y, txt], i) => (
+          <div key={i} className={`elabel iface ${selected ? 'sel' : ''}`}
             style={{ transform: `translate(-50%,-50%) translate(${x}px,${y}px)` }}>{txt}</div>
         ))}
         {extra.map(([cls, txt], i) => (
@@ -351,7 +355,7 @@ function Editor({ name, templates, onError, onBack, onReloadTemplates }) {
   const [panMode, setPanMode] = usePref('netso.panMode', true) // true = drag pans the sheet; false = drag rubber-band selects
   const iconStyle = useIconStyle()
   const theme = useTheme()
-  const [ifaceLabels, setIfaceLabels] = usePref('netso.ifaceLabels', 'always')
+  const [ifaceLabels, setIfaceLabels] = usePref('netso.ifaceLabels', 'hover')
   const [showMap, setShowMap] = usePref('netso.minimap', false)
   const [zoom, setZoom] = useState(1)
   const [pending, setPending] = useState({}) // node -> 'start' | 'stop' while the request runs
@@ -454,13 +458,13 @@ function Editor({ name, templates, onError, onBack, onReloadTemplates }) {
         data: {
           a: tag(a, ai), b: tag(b, bi), cond: condSummary(l), cap, offset: (k - (total[p] - 1) / 2) * 16,
           color: l.color, style: l.style, width: l.width, shape: l.shape, bend: l.bend, label: l.label,
-          aSt: state?.nodes?.[a]?.status, bSt: state?.nodes?.[b]?.status,
+          aSt: state?.nodes?.[a]?.status, bSt: state?.nodes?.[b]?.status, ifaceMode: ifaceLabels,
         },
         className: `${up ? 'edge-up' : ''} ${cap ? 'edge-cap' : ''}`,
         selected: selected?.type === 'edge' && selected.id === `l${i}`,
       }
     })
-  }, [lab, state, selected, caps])
+  }, [lab, state, selected, caps, ifaceLabels])
 
   const mutate = (fn) => { setLab((l) => { const c = structuredClone(l); fn(c); return c }); setDirty(true) }
   const tplOf = (nodeName) => tplByName[lab?.nodes.find((n) => n.name === nodeName)?.template]
@@ -1084,7 +1088,7 @@ function Editor({ name, templates, onError, onBack, onReloadTemplates }) {
                 }}
                 onNodeDoubleClick={(_, n) => { if (!n.id.startsWith(ANN) && state?.nodes?.[n.id]?.status === 'running' && isVm(tplOf(n.id))) { openConsole(n.id); clearSelection() } }}
                 onMove={(_, v) => setZoom(v.zoom)}
-                connectionMode={ConnectionMode.Loose}
+                connectionMode={ConnectionMode.Loose} connectionLineType="straight"
                 nodesDraggable={!locked} nodesConnectable={!locked}
                 panOnDrag={panMode ? [0, 1] : [1]} selectionOnDrag={!panMode} panOnScroll zoomOnScroll zoomOnDoubleClick={false}
                 fitView fitViewOptions={{ padding: 0.3, maxZoom: 1.2 }}
@@ -1895,6 +1899,20 @@ function Markdown({ text }) {
     if (line.startsWith('### ')) { blocks.push(<h5 key={blocks.length}>{mdInline(line.slice(4))}</h5>); i++; continue }
     if (line.startsWith('## ')) { blocks.push(<h4 key={blocks.length}>{mdInline(line.slice(3))}</h4>); i++; continue }
     if (line.startsWith('# ')) { blocks.push(<h3 key={blocks.length}>{mdInline(line.slice(2))}</h3>); i++; continue }
+    // GFM-style table: a header row with | and a --- separator line beneath
+    if (line.includes('|') && i + 1 < lines.length && /^\s*\|?[\s:|-]*-[\s:|-]*\|?\s*$/.test(lines[i + 1])) {
+      const cells = (r) => r.replace(/^\s*\|/, '').replace(/\|\s*$/, '').split('|').map((c) => c.trim())
+      const head = cells(line); i += 2
+      const rows = []
+      while (i < lines.length && lines[i].includes('|') && lines[i].trim()) { rows.push(cells(lines[i])); i++ }
+      blocks.push(
+        <table key={blocks.length} className="md-table">
+          <thead><tr>{head.map((h, j) => <th key={j}>{mdInline(h)}</th>)}</tr></thead>
+          <tbody>{rows.map((r, ri) => <tr key={ri}>{r.map((c, ci) => <td key={ci}>{mdInline(c)}</td>)}</tr>)}</tbody>
+        </table>,
+      )
+      continue
+    }
     if (/^\s*([-*]|\d+\.)\s/.test(line)) {
       const items = []
       while (i < lines.length && /^\s*([-*]|\d+\.)\s/.test(lines[i])) {

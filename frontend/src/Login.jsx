@@ -11,7 +11,7 @@ export function Logo({ size = 32 }) {
     <svg viewBox="0 0 32 32" width={size} height={size} aria-hidden="true">
       <defs>
         <linearGradient id={id} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#a08cff" /><stop offset=".55" stopColor="#6a7dff" /><stop offset="1" stopColor="#3fa9ff" />
+          <stop offset="0" stopColor="#a08cff" /><stop offset=".5" stopColor="#6a7dff" /><stop offset="1" stopColor="#2dd4bf" />
         </linearGradient>
       </defs>
       <rect width="32" height="32" rx="9" fill={`url(#${id})`} />

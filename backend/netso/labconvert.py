@@ -114,16 +114,20 @@ def _guide(name: str, topic: str, devs: dict, routers: list[str], bridges: list[
            "(le interfacce partono già indirizzate: tocca a te il protocollo).", ""]
     out.append(f"## Dispositivi ({len(routers)} router" + (f" + {len(bridges)} switch" if bridges else "") + ")")
     out += [f"- **{', '.join(routers)}**"] + ([f"- switch: {', '.join(bridges)}"] if bridges else [])
-    out += ["", "## Indirizzi IP (già impostati)"]
+    out += ["", "## Indirizzi IP (già impostati)", "",
+            "| Dispositivo | Interfaccia | Indirizzo |", "|---|---|---|"]
     for d in routers:
-        addrs = {}  # iface -> "ip/pfx"
+        addrs = {}  # iface -> ["ip/pfx", ...]
         for i, (ip, m) in devs[d]["ifaces"].items():
             addrs.setdefault(i, []).append(f"{ip}/{ipaddress.IPv4Network(f'0.0.0.0/{m}').prefixlen}")
         for i, (a6, p6) in devs[d]["ifaces6"].items():
             addrs.setdefault(i, []).append(f"{a6}/{p6}")
-        phys = [f"{i} {' '.join(addrs[i])}" for i in addrs if not _is_loop(i)]
-        loops = [f"{i} {' '.join(addrs[i])}" for i in addrs if _is_loop(i)]
-        out.append(f"- **{d}** — " + " · ".join(phys) + (("  · loopback: " + ", ".join(loops)) if loops else ""))
+        order = [i for i in addrs if not _is_loop(i)] + [i for i in addrs if _is_loop(i)]
+        if not order:
+            out.append(f"| **{d}** | — | — |")
+            continue
+        for j, i in enumerate(order):
+            out.append(f"| {f'**{d}**' if j == 0 else ''} | `{i}` | {' '.join(addrs[i])} |")
     out += ["", "## Collegamenti"]
     for net in sorted(nets, key=str):
         eps = nets[net]

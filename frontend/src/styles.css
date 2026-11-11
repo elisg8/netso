@@ -362,21 +362,27 @@ kbd { font: 10.5px var(--mono); color: var(--muted); border: 1px solid var(--lin
 .devnode.st-running.sel .chip { border-color: var(--accent); }
 .devnode.st-error .chip { border-color: #7f2d2d; color: var(--danger); }
 .devnode.st-stopped .chip { color: var(--muted); }
-.devnode .lbl { font-weight: 600; font-size: 12.5px; line-height: 1.1; max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 1px 5px; border-radius: 4px; }
-.devnode .lbl { background: var(--xy-background-color); } /* a cable going down passes behind the name */
+.devnode .lbl { font-weight: 600; font-size: 10px; line-height: 1.1; max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 1px 5px; border-radius: 4px; background: var(--xy-background-color); }
 .devnode.sel .lbl { background: linear-gradient(#8b7bff26, #8b7bff26), var(--xy-background-color); color: var(--text-strong); }
 .devnode .sub { font-size: 10px; color: var(--muted); max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.hdl.plug { width: 24px !important; height: 24px !important; min-width: 0; top: calc(29px * var(--k, 1) - 12px) !important; left: calc(50% + 29px * var(--k, 1) - 11px) !important; transform: none !important;
+/* big, obvious "drag me onto another node to connect" button at the card's top-right corner */
+.hdl.plug { width: 28px !important; height: 28px !important; min-width: 0; top: -7px !important; left: auto !important; right: 2px !important; transform: none !important;
   display: grid; place-items: center; color: #3a1606; background: radial-gradient(circle at 35% 30%, #fdba74, #f97316) !important;
-  border: 2px solid var(--bg) !important; border-radius: 50% !important; box-shadow: 0 3px 10px #f9731666; cursor: crosshair !important;
+  border: 2.5px solid var(--bg) !important; border-radius: 50% !important; box-shadow: 0 3px 12px #f9731688; cursor: crosshair !important;
   opacity: 0; transition: opacity .12s, transform .12s; z-index: 5; }
-.hdl.plug svg { pointer-events: none; transform: rotate(-35deg); }
+.hdl.plug svg { pointer-events: none; transform: rotate(-35deg); width: 17px; height: 17px; }
 .devnode:hover .hdl.plug, .devnode.sel .hdl.plug { opacity: 1; }
-.hdl.plug:hover { transform: scale(1.15) !important; }
+.devnode:hover .hdl.plug { animation: plugpulse 1.8s ease-in-out infinite; }
+.hdl.plug:hover { transform: scale(1.18) !important; animation: none; }
+@keyframes plugpulse { 0%, 100% { box-shadow: 0 3px 12px #f9731688; } 50% { box-shadow: 0 3px 12px #f9731688, 0 0 0 6px #f9731626; } }
 .canvas.linking .hdl.plug { opacity: 0; }
 .hdl-drop { position: absolute !important; inset: -6px !important; width: auto !important; height: auto !important; transform: none !important; border: none !important; border-radius: 16px !important; background: transparent !important; opacity: 1; pointer-events: none !important; }
 .canvas.linking .hdl-drop { pointer-events: all !important; }
 .hdl-drop.connectingto, .hdl-drop.valid { background: #8b7bff14 !important; outline: 2px dashed var(--accent); }
+/* the "wire" you drag from a node to connect it: an animated dashed accent cable */
+.react-flow__connection-path { stroke: var(--accent) !important; stroke-width: 2.6 !important; fill: none !important;
+  stroke-dasharray: 7 5; stroke-linecap: round; filter: drop-shadow(0 0 5px #8b7bff66); animation: wireflow .5s linear infinite; }
+@keyframes wireflow { to { stroke-dashoffset: -12; } }
 
 /* floating action toolbar (appears above the selected node) */
 .node-tb { display: flex; align-items: center; gap: 2px; padding: 4px; background: var(--glass); border: 1px solid var(--line2); border-radius: 11px; box-shadow: 0 10px 28px var(--shadow); }
@@ -808,9 +814,8 @@ button.ghost-b { background: transparent; }
 .sect-body .impair { margin-top: 0; }
 .panel > .danger.wide { margin-top: 16px; }
 
-/* interface names: always, or only on hover / selection */
-.editor.labels-hover .elabel:not(.name):not(.cond):not(.capb) { opacity: 0; transition: opacity .12s; }
-.editor.labels-hover .react-flow__edge:hover ~ * .elabel, .editor.labels-hover .elabel.sel { opacity: 1; }
+/* interface names fade in (the edge decides when to show them — see CenterEdge) */
+.elabel.iface { transition: opacity .12s; }
 
 /* light theme tweaks */
 [data-theme="light"] .devnode .lbl { color: var(--text); }
@@ -1298,6 +1303,10 @@ body:has(.drag-ghost) { cursor: grabbing !important; user-select: none; }
 .md .md-list li { margin: 2px 0; }
 .md code { background: var(--sunken); padding: 1px 5px; border-radius: 5px; font-size: 12px; }
 .md .md-code { background: var(--sunken); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 12px; overflow: auto; white-space: pre; margin: 6px 0; }
+.md .md-table { border-collapse: collapse; margin: 8px 0; font-size: 12.5px; width: 100%; display: block; overflow-x: auto; }
+.md .md-table th, .md .md-table td { border: 1px solid var(--line); padding: 4px 9px; text-align: left; white-space: nowrap; }
+.md .md-table th { background: var(--sunken); color: var(--accent, #8b7bff); font-weight: 600; }
+.md .md-table tr:nth-child(even) td { background: color-mix(in srgb, var(--sunken) 45%, transparent); }
 
 /* floating lab-guide tab on the left + scenario level badges */
 .guide-fab { position: fixed; left: 0; top: 46%; z-index: 40; display: flex; flex-direction: column; align-items: center; gap: 6px;

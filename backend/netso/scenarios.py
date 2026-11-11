@@ -1348,18 +1348,24 @@ def _guide(topic: str, meta: dict, routers: list[str], ifips: dict, lo: dict, so
         out += ["", "## Come funziona", CONCEPT[topic]]
     out += ["", "## Indirizzi IP (già impostati all'avvio)",
             "Gli IP sono già configurati: ogni link è una /30 punto-punto e ogni router ha una loopback /32 "
-            "(il suo router-id). Tu devi solo far girare il protocollo; questa tabella ti serve per sapere chi è "
-            "vicino a chi e quali next-hop usare."]
+            "(il suo router-id). Tu devi far girare solo il protocollo; questa tabella dice chi è vicino a chi "
+            "e quali next-hop usare.", "",
+            "| Router | Loopback | Interfaccia | IP / prefisso | Verso | IP vicino |",
+            "|---|---|---|---|---|---|"]
     for r in routers:
-        out.append(f"- **{r}** — loopback {lo[r]}/32")
-        for ifc in sorted(ifips.get(r, {})):
-            ip, pfx, net, peer_ip, peer = ifips[r][ifc]
-            out.append(f"    - `{ifc}` {ip}/{pfx}  →  verso **{peer}** ({peer_ip})")
+        ifs = sorted(ifips.get(r, {}))
+        if not ifs:
+            out.append(f"| **{r}** | {lo[r]}/32 | — | — | — | — |")
+            continue
+        for j, ifc in enumerate(ifs):
+            ip, pfx, _net, peer_ip, peer = ifips[r][ifc]
+            out.append(f"| {f'**{r}**' if j == 0 else ''} | {f'{lo[r]}/32' if j == 0 else ''} | `{ifc}` | {ip}/{pfx} | **{peer}** | {peer_ip} |")
     out += ["", "## Passi",
             f"Apri la consolle di ogni router {router_label} ed entra in configurazione (su FRR `vtysh` poi "
             "`configure terminal`, su IOS `configure terminal`). Esegui questi passi su **ogni** router, "
             "adattando interfacce e indirizzi alla tabella qui sopra:"]
     out += [f"{i + 1}. {s}" for i, s in enumerate(steps)] or ["1. Configura il protocollo richiesto."]
+    out += [f"{len(steps) + 1}. Salva la configurazione (`write memory` su IOS, `write` su FRR) così resta dopo un riavvio."]
     out += ["", "## Verifica",
             "Dopo aver configurato tutti i router, controlla che il protocollo lavori e che ci sia connettività "
             "end-to-end:"]
