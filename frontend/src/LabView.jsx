@@ -267,7 +267,9 @@ function CenterEdge({ id, source, target, data, selected, interactionWidth }) {
   const long = g.len > 150
   // each interface name sits ON its own cable, a little past the port: since every link leaves
   // the node at its own angle the names fan out along the wires and don't pile up
-  const lab = (x, y, [dx, dy], h) => [x + dx * (h + 20), y + dy * (h + 20)]
+  // on the cable, just past the port; a cable heading DOWN pushes its label a bit further along
+  // the wire so it clears the node's name badge (which sits right below the icon) instead of sitting on it
+  const lab = (x, y, [dx, dy], h) => { const d = h + 20 + 16 * Math.max(0, dy); return [x + dx * d, y + dy * d] }
   const ifaceLabels = [
     [...lab(sx, sy, g.dirs[0], half(s)), data.a],
     [...lab(tx, ty, g.dirs[1], half(t)), data.b],
