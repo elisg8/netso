@@ -635,10 +635,10 @@ button.danger-t { color: var(--danger); }
   border-radius: 10px; overflow: hidden; box-shadow: 0 18px 50px #000a; animation: pop .12s ease-out; }
 .cwin-head { display: flex; align-items: center; gap: 8px; padding: 5px 5px 5px 11px; background: var(--panel);
   border-bottom: 1px solid var(--line); font-size: 12.5px; font-weight: 600; color: var(--text); cursor: move; flex: none; user-select: none; }
-.cwin-head { cursor: default; }
+.cwin-head { cursor: move; }
 .cwin-head .grow { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cwin-drag { display: inline-grid; place-items: center; color: var(--muted); padding: 2px 2px; cursor: grab; flex: none; }
-.cwin-drag:active { cursor: grabbing; }
+.cwin-drag { display: inline-grid; place-items: center; color: var(--muted); padding: 2px 2px; flex: none; }
+.cwin-tabs .tab { cursor: pointer; }
 .cwin-tabs { flex: 1; min-width: 0; display: flex; gap: 2px; overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; }
 .cwin-tabs::-webkit-scrollbar { height: 5px; }
 .cwin-tabs .tab { flex: none; max-width: 150px; border-radius: 7px 7px 0 0; border-bottom-width: 2px; margin-bottom: -1px; }

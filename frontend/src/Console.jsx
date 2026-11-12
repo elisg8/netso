@@ -318,6 +318,7 @@ export function ConsoleWindows({ lab, items, kindOf, onClose }) {
     const fresh = ids.filter((id) => !seen.current.has(id))
     seen.current = new Set(ids)
     setActive((a) => (fresh.length ? fresh[fresh.length - 1] : ids.includes(a) ? a : (ids[ids.length - 1] ?? null)))
+    if (fresh.length) setWin((w) => (w.min ? { ...w, min: false } : w))  // una nuova consolle riapre la finestra ridotta
   }, [items])
   const upd = (patch) => setWin((w) => ({ ...w, ...patch }))
   const grab = (e, mode) => {
@@ -339,8 +340,8 @@ export function ConsoleWindows({ lab, items, kindOf, onClose }) {
   )
   return (
     <div className="cwin" style={{ left: win.x, top: win.y, width: win.w, height: win.h, zIndex: 40 }}>
-      <div className="cwin-head">
-        <span className="cwin-drag" title="Trascina la finestra" onMouseDown={(e) => grab(e, 'move')}><Ui name="console" size={14} /></span>
+      <div className="cwin-head" title="Trascina per spostare la finestra" onMouseDown={(e) => grab(e, 'move')}>
+        <span className="cwin-drag"><Ui name="console" size={14} /></span>
         <div className="cwin-tabs">
           {items.map((it) => (
             <div key={it.id} className={`tab ${it.id === active ? 'on' : ''}`} title={it.node} onMouseDown={(e) => { e.stopPropagation(); setActive(it.id) }}>
@@ -349,8 +350,8 @@ export function ConsoleWindows({ lab, items, kindOf, onClose }) {
             </div>
           ))}
         </div>
-        <button className="cwin-btn" title="Riduci a icona" onClick={() => upd({ min: true })}><Ui name="minus" size={14} /></button>
-        <button className="cwin-btn" title="Chiudi tutte le consolle" onClick={() => items.forEach((it) => onClose(it.id))}><Ui name="close" size={14} /></button>
+        <button className="cwin-btn" title="Riduci a icona" onMouseDown={(e) => e.stopPropagation()} onClick={() => upd({ min: true })}><Ui name="minus" size={14} /></button>
+        <button className="cwin-btn" title="Chiudi tutte le consolle" onMouseDown={(e) => e.stopPropagation()} onClick={() => items.forEach((it) => onClose(it.id))}><Ui name="close" size={14} /></button>
       </div>
       <div className="cwin-body">
         {items.map((it) => <Console key={it.id} lab={lab} node={it.node} visible={it.id === active} kind={kindOf(it.node)} />)}

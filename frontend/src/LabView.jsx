@@ -698,7 +698,13 @@ function Editor({ name, templates, onError, onBack, onReloadTemplates }) {
       .catch((e) => { w?.close(); onError(e) })
   }
   const openConsoles = (nodes) => {
-    if (consoleTarget === 'native') return openNative(nodes)  // apri nel terminale del PC invece che nel browser
+    if (consoleTarget === 'native') {  // apri nel terminale del PC; le console web (http/https) restano nel browser
+      const web = nodes.filter((n) => ['http', 'https'].includes(consoleKind(state?.nodes?.[n])))
+      web.forEach((n) => openWeb(n, consoleKind(state.nodes[n])))
+      const rest = nodes.filter((n) => !web.includes(n))
+      if (rest.length) openNative(rest)
+      return
+    }
     let list = nodes.filter((n) => canDo(tplOf(n), state?.nodes?.[n], 'console'))
     list.filter((n) => ['http', 'https'].includes(consoleKind(state.nodes[n]))).forEach((n) => openWeb(n, consoleKind(state.nodes[n])))
     list = list.filter((n) => !['http', 'https'].includes(consoleKind(state.nodes[n])))
