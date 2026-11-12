@@ -350,6 +350,8 @@ function Editor({ name, templates, onError, onBack, onReloadTemplates }) {
   const [listDlg, setListDlg] = useState(null) // 'nodes' | 'links' | 'details' | 'status'
   const [cfgDlg, setCfgDlg] = useState(null) // {node?} startup-config editor
   const [capDlg, setCapDlg] = useState(null) // {node?, iface?} packet capture window
+  const [extHelpSeen, setExtHelpSeen] = usePref('netso.extConsoleHelpSeen', false)
+  const [showExtHelp, setShowExtHelp] = useState(false)
   const [caps, setCaps] = useState([]) // packet captures of this lab
   const [wsWins, setWsWins] = useState([]) // in-browser Wireshark windows [{session, peer, min}]
   const [wsSessions, setWsSessions] = useState([]) // Wireshark sessions running on the server (any tab)
@@ -726,12 +728,64 @@ function Editor({ name, templates, onError, onBack, onReloadTemplates }) {
     if ((k === 'rdp' || k === 'rdp-tls') && ns.mgmt_ip) return { uri: `rdp://${ns.mgmt_ip}:3389`, app: 'RDP' }
     return null
   }
+  // terminal consoles (telnet/ssh) open in the user's OWN terminal via a tiny launcher file it downloads
+  const termTarget = (ns) => {
+    if (!ns || ns.status !== 'running') return null
+    const k = consoleKind(ns)
+    if (k === 'telnet' && ns.console_port) return { proto: 'telnet', host: location.hostname, port: ns.console_port }
+    if (k === 'exec' && ns.mgmt_ip) return { proto: 'ssh', host: ns.mgmt_ip, port: 22, user: 'root' }
+    return null
+  }
+  const osKind = () => {
+    const p = (navigator.userAgentData?.platform || navigator.platform || navigator.userAgent || '').toLowerCase()
+    return /win/.test(p) ? 'win' : /mac|iphone|ipad/.test(p) ? 'mac' : 'linux'
+  }
+  const launcherFile = (os, t, node) => {
+    const safe = (node || 'node').replace(/[^\w.-]+/g, '_')
+    const H = t.host, P = t.port
+    const ssh = t.proto === 'ssh'
+    const run = ssh
+      ? { term: `ssh ${t.user}@${H}`, winGui: `putty -ssh ${t.user}@${H} -P ${P}`, winCli: `ssh ${t.user}@${H}` }
+      : { term: `telnet ${H} ${P}`, winGui: `putty -telnet ${H} -P ${P}`, winCli: `telnet ${H} ${P}` }
+    if (os === 'win') {
+      const need = ssh ? 'un client SSH (PuTTY o OpenSSH)' : 'PuTTY o il «Client Telnet» di Windows'
+      return { name: `console-${safe}.bat`, text: [
+        '@echo off', `title NetSO - ${safe}`,
+        `where putty >nul 2>nul && (start "" ${run.winGui} & exit /b)`,
+        `where ${ssh ? 'ssh' : 'telnet'} >nul 2>nul && (start "" ${run.winCli} & exit /b)`,
+        `echo Serve ${need}. Scarica PuTTY da https://www.putty.org`, 'pause', '',
+      ].join('\r\n') }
+    }
+    if (os === 'mac') {
+      const body = ssh
+        ? `exec ${run.term}`
+        : [`command -v telnet >/dev/null 2>&1 && exec ${run.term}`,
+           `command -v nc >/dev/null 2>&1 && { echo "(telnet assente, uso nc)"; exec nc ${H} ${P}; }`,
+           'echo "Manca telnet: installalo con  brew install telnet"',
+           'read -n1 -r -p "Premi un tasto per chiudere..."'].join('\n')
+      return { name: `console-${safe}.command`, text: ['#!/bin/bash', `# NetSO console: ${safe}`, 'clear',
+        `echo "NetSO -> ${safe}  (${run.term})"`, body, ''].join('\n') }
+    }
+    return { name: `console-${safe}.sh`, text: ['#!/bin/sh', `# NetSO console: ${safe}`,
+      'for T in x-terminal-emulator gnome-terminal konsole xfce4-terminal xterm; do',
+      `  command -v "$T" >/dev/null 2>&1 && exec "$T" -e "${run.term}"`, 'done', `exec ${run.term}`, ''].join('\n') }
+  }
   const openNative = (nodes) => {
-    const uris = nodes.map((n) => nativeConsole(state?.nodes?.[n])).filter(Boolean)
-    if (!uris.length) { onError(new Error('Nessuna consolle esterna disponibile (telnet/VNC/SPICE) per questo nodo')); return }
-    uris.forEach(({ uri }, i) => setTimeout(() => {
-      const a = document.createElement('a'); a.href = uri; a.rel = 'noreferrer'; a.click()
+    const os = osKind()
+    const list = nodes.map((n) => ({ n, g: nativeConsole(state?.nodes?.[n]), t: termTarget(state?.nodes?.[n]) }))
+    const graphical = list.filter((x) => !x.t && x.g)  // VNC/SPICE/RDP: the OS viewer via its URI
+    const terminals = list.filter((x) => x.t)           // telnet/ssh: a launcher the PC terminal runs
+    if (!graphical.length && !terminals.length) { onError(new Error('Nessuna consolle esterna disponibile per questo nodo')); return }
+    graphical.forEach(({ g }, i) => setTimeout(() => {
+      const a = document.createElement('a'); a.href = g.uri; a.rel = 'noreferrer'; a.click()
     }, i * 400))
+    terminals.forEach(({ n, t }, i) => setTimeout(() => {
+      const f = launcherFile(os, t, n)
+      const u = URL.createObjectURL(new Blob([f.text], { type: 'application/octet-stream' }))
+      const a = document.createElement('a'); a.href = u; a.download = f.name; a.click()
+      setTimeout(() => URL.revokeObjectURL(u), 5000)
+    }, i * 500))
+    if (terminals.length && !extHelpSeen) setShowExtHelp(true)
   }
 
   // ---- Wireshark in the browser
@@ -875,7 +929,7 @@ function Editor({ name, templates, onError, onBack, onReloadTemplates }) {
           isVm(tpl) && { icon: 'play', label: 'Avvia', cls: 'go', disabled: up || !!pending[n], onClick: () => nodeAction(n, 'start') },
           isVm(tpl) && { icon: 'stop', label: 'Ferma', cls: 'stop', disabled: !up || !!pending[n], onClick: () => nodeAction(n, 'stop') },
           isVm(tpl) && { icon: 'console', label: 'Consolle', disabled: !canDo(tpl, ns, 'console'), onClick: () => openConsole(n) },
-          isVm(tpl) && up && nativeConsole(ns) && { icon: 'expand', label: `Consolle esterna (${nativeConsole(ns).app})`, onClick: () => openNative([n]) },
+          isVm(tpl) && up && (termTarget(ns) || nativeConsole(ns)) && { icon: 'expand', label: termTarget(ns) ? 'Consolle nel terminale del PC' : `Consolle esterna (${nativeConsole(ns).app})`, onClick: () => openNative([n]) },
           hasDisks(tpl) && { icon: 'wipe', label: 'Azzera dischi (wipe)', disabled: !canDo(tpl, ns, 'wipe'), onClick: () => nodeAction(n, 'wipe') },
           isVm(tpl) && { sep: true },
           { icon: node.pinned ? 'unlock' : 'lock', label: node.pinned ? 'Sblocca posizione' : 'Blocca posizione', disabled: locked,
@@ -906,7 +960,7 @@ function Editor({ name, templates, onError, onBack, onReloadTemplates }) {
           { icon: 'play', label: 'Avvia selezionati', onClick: () => bulk(ids, 'start') },
           { icon: 'stop', label: 'Ferma selezionati', onClick: () => bulk(ids, 'stop') },
           { icon: 'console', label: 'Apri consolle', onClick: () => openConsoles(ids) },
-          { icon: 'expand', label: 'Consolle esterna (client)', onClick: () => openNative(ids) },
+          { icon: 'expand', label: 'Consolle nel terminale del PC', onClick: () => openNative(ids) },
           { icon: 'wipe', label: 'Azzera selezionati', onClick: () => bulk(ids, 'wipe') },
           { sep: true },
           { icon: 'trash', label: 'Elimina selezionati', danger: true, disabled: locked, onClick: () => removeNodes(ids) },
@@ -1271,6 +1325,21 @@ function Editor({ name, templates, onError, onBack, onReloadTemplates }) {
         onError={onError} onAdd={addGenerated} />}
       {snapDlg && <SnapshotsDialog lab={name} dirty={dirty} onSave={() => save()} onClose={() => setSnapDlg(false)} onError={onError}
         onRestored={() => { setSnapDlg(false); load() }} />}
+      {showExtHelp && (
+        <div className="modal-bg" onClick={() => setShowExtHelp(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <ModalHead icon="expand" title="Consolle nel terminale del PC" onClose={() => setShowExtHelp(false)} />
+            <p className="hint">NetSO ha scaricato un file che apre la consolle nel terminale del tuo computer. Aprilo così:</p>
+            <ul className="ext-help">
+              <li className={osKind() === 'mac' ? 'on' : ''}><b>macOS</b> — file <code>.command</code>: al primo uso tasto destro → <b>Apri</b> (per superare Gatekeeper). Serve <code>telnet</code> (<code>brew install telnet</code>).</li>
+              <li className={osKind() === 'win' ? 'on' : ''}><b>Windows</b> — file <code>.bat</code>: doppio click. Serve <b>PuTTY</b> (consigliato) o il «Client Telnet» di Windows abilitato.</li>
+              <li className={osKind() === 'linux' ? 'on' : ''}><b>Linux</b> — file <code>.sh</code>: <code>chmod +x</code> e doppio click, oppure eseguilo dal terminale.</li>
+            </ul>
+            <label className="ext-help-ck"><input type="checkbox" onChange={(e) => setExtHelpSeen(e.target.checked)} /> Non mostrare più</label>
+            <div className="row-end"><button className="primary" onClick={() => setShowExtHelp(false)}>Ho capito</button></div>
+          </div>
+        </div>
+      )}
       {addDlg && <AddNodeDialog templates={templates} lab={lab} at={addDlg.at} onClose={() => setAddDlg(null)}
         onAdd={(opts) => { addNodes(opts, addDlg.pos); setAddDlg(null) }} />}
 
