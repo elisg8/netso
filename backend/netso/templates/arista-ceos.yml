@@ -4,6 +4,7 @@ kind: docker
 description: Arista cEOS-lab (container). Immagine da arista.com, da importare con 'docker import' come ceos:latest. Da verificare.
 icon: l3switch
 vendor: Arista
+console_user: admin
 image: ceos:latest
 ram: 2048
 nics: 8

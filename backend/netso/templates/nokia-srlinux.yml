@@ -1,9 +1,10 @@
 name: nokia-srlinux
 title: Nokia SR Linux
 kind: docker
-description: Nokia SR Linux (container, immagine pubblica ghcr.io). Interfacce e1-1… Da verificare sul server.
+description: Nokia SR Linux (container, immagine pubblica ghcr.io/nokia/srlinux:latest). Interfacce e1-1…
 icon: router
 vendor: Nokia
+console_user: admin
 image: ghcr.io/nokia/srlinux:latest
 nics: 8
 console: exec

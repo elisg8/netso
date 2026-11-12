@@ -1,9 +1,9 @@
 name: frr
 title: FRRouting
 kind: docker
-description: Router FRRouting (OSPF, BGP, IS-IS...). Verifica il tag disponibile prima dell'uso.
+description: Router FRRouting (OSPF, BGP, IS-IS…), immagine pubblica quay.io.
 icon: router
-image: quay.io/frrouting/frr:10.2.1
+image: quay.io/frrouting/frr:10.7.1
 nics: 8
 console: exec
 config_method: copy

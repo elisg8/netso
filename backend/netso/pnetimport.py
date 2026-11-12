@@ -40,7 +40,7 @@ SSH_OPTS = ["-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=accept-new", "-o
 
 # EVE-NG/PNETLab folder prefix -> built-in NetSO device
 KNOWN = {"vios": "cisco-iosv", "viosl2": "cisco-iosvl2", "c8000v": "cisco-c8000v", "fortinet": "fortigate",
-         "vyos": "vyos", "linux": "linux-vm"}
+         "fmc": "cisco-fmc", "vyos": "vyos", "linux": "linux-vm"}
 DYN_KNOWN = {"c7200": "cisco-c7200", "c3725": "cisco-c3725"}
 # Defaults for common types without a NetSO device, used when the server's own template file is not found
 # (icon, cpus, ram MB, nics, interface prefix, first index, nic model). Values to check on first boot.
@@ -49,6 +49,7 @@ GUESS = {
     "firepower": ("firewall", 4, 8192, 8, "G0/", 0, "e1000"),   # Cisco FTD (names via IFACE_NAMES below)
     "ftdv": ("firewall", 4, 8192, 8, "G0/", 0, "e1000"),
     "ftd": ("firewall", 4, 8192, 8, "G0/", 0, "e1000"),
+    "fmc": ("server", 4, 8192, 1, "eth", 0, "e1000"),  # Firepower Management Center: 1 NIC mgmt (8 GB/e1000 come EVE-NG/PNETLab)
     "csr1000vng": ("router", 1, 4096, 4, "Gi", 1, "virtio-net-pci"),
     "csr1000v": ("router", 1, 4096, 4, "Gi", 1, "virtio-net-pci"),
     "xrv": ("router", 1, 3072, 4, "Gi0/0/0/", 0, "e1000"),

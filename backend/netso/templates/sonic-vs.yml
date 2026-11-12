@@ -4,6 +4,7 @@ kind: docker
 description: SONiC virtual switch (container docker-sonic-vs). Immagine da sonic-net, da caricare con 'docker load'. Da verificare.
 icon: l3switch
 vendor: SONiC
+console_user: admin
 image: docker-sonic-vs:latest
 nics: 8
 console: exec
