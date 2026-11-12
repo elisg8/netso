@@ -265,7 +265,13 @@ function CenterEdge({ id, source, target, data, selected, interactionWidth }) {
     strokeDasharray: linkDash(data.style, w), strokeLinecap: data.style === 'dotted' ? 'round' : undefined,
   }
   const long = g.len > 150
-  const ifaceLabels = long ? [[...g.ends[0], data.a], [...g.ends[1], data.b]] : [[mx, my, `${data.a} ⟷ ${data.b}`]]
+  // each interface name sits ON its own cable, a little past the port: since every link leaves
+  // the node at its own angle the names fan out along the wires and don't pile up
+  const lab = (x, y, [dx, dy], h) => [x + dx * (h + 20), y + dy * (h + 20)]
+  const ifaceLabels = [
+    [...lab(sx, sy, g.dirs[0], half(s)), data.a],
+    [...lab(tx, ty, g.dirs[1], half(t)), data.b],
+  ]
   const showIface = data.ifaceMode !== 'hover' || hv || selected
   const extra = [data.label && ['name', data.label], data.cap && ['capb', '● cattura'], data.cond && long && ['cond', `⏱ ${data.cond}`]].filter(Boolean)
   return (
