@@ -345,6 +345,7 @@ function Editor({ name, templates, onError, onBack, onReloadTemplates }) {
   }
   const [activeConsole, setActiveConsole] = useState(null)
   const [consoleMode, setConsoleMode] = usePref('netso.consoleMode', 'window') // 'window' = finestre mobili (predefinito) · 'dock' = in basso
+  const [consoleTarget, setConsoleTarget] = usePref('netso.consoleTarget', 'browser') // 'browser' = terminale nel browser · 'native' = terminale del PC
   const [yaml, setYaml] = useState(null)
   const [menu, setMenu] = useState(null) // right-click menu {kind:'pane'|'node'|'edge'|'selection', x, y, id?, pos?}
   const [addDlg, setAddDlg] = useState(null) // {pos} "add a new node" dialog
@@ -697,6 +698,7 @@ function Editor({ name, templates, onError, onBack, onReloadTemplates }) {
       .catch((e) => { w?.close(); onError(e) })
   }
   const openConsoles = (nodes) => {
+    if (consoleTarget === 'native') return openNative(nodes)  // apri nel terminale del PC invece che nel browser
     let list = nodes.filter((n) => canDo(tplOf(n), state?.nodes?.[n], 'console'))
     list.filter((n) => ['http', 'https'].includes(consoleKind(state.nodes[n]))).forEach((n) => openWeb(n, consoleKind(state.nodes[n])))
     list = list.filter((n) => !['http', 'https'].includes(consoleKind(state.nodes[n])))
@@ -731,11 +733,11 @@ function Editor({ name, templates, onError, onBack, onReloadTemplates }) {
     return null
   }
   // terminal consoles (telnet/ssh) open in the user's OWN terminal via a tiny launcher file it downloads
-  const termTarget = (ns) => {
+  const termTarget = (ns, tpl) => {
     if (!ns || ns.status !== 'running') return null
     const k = consoleKind(ns)
     if (k === 'telnet' && ns.console_port) return { proto: 'telnet', host: location.hostname, port: ns.console_port }
-    if (k === 'exec' && ns.mgmt_ip) return { proto: 'ssh', host: ns.mgmt_ip, port: 22, user: 'root' }
+    if (k === 'exec' && ns.mgmt_ip) return { proto: 'ssh', host: ns.mgmt_ip, port: 22, user: tpl?.console_user || 'root' }
     return null
   }
   const osKind = () => {
@@ -774,7 +776,7 @@ function Editor({ name, templates, onError, onBack, onReloadTemplates }) {
   }
   const openNative = (nodes) => {
     const os = osKind()
-    const list = nodes.map((n) => ({ n, g: nativeConsole(state?.nodes?.[n]), t: termTarget(state?.nodes?.[n]) }))
+    const list = nodes.map((n) => ({ n, g: nativeConsole(state?.nodes?.[n]), t: termTarget(state?.nodes?.[n], tplOf(n)) }))
     const graphical = list.filter((x) => !x.t && x.g)  // VNC/SPICE/RDP: the OS viewer via its URI
     const terminals = list.filter((x) => x.t)           // telnet/ssh: a launcher the PC terminal runs
     if (!graphical.length && !terminals.length) { onError(new Error('Nessuna consolle esterna disponibile per questo nodo')); return }
@@ -931,7 +933,7 @@ function Editor({ name, templates, onError, onBack, onReloadTemplates }) {
           isVm(tpl) && { icon: 'play', label: 'Avvia', cls: 'go', disabled: up || !!pending[n], onClick: () => nodeAction(n, 'start') },
           isVm(tpl) && { icon: 'stop', label: 'Ferma', cls: 'stop', disabled: !up || !!pending[n], onClick: () => nodeAction(n, 'stop') },
           isVm(tpl) && { icon: 'console', label: 'Consolle', disabled: !canDo(tpl, ns, 'console'), onClick: () => openConsole(n) },
-          isVm(tpl) && up && (termTarget(ns) || nativeConsole(ns)) && { icon: 'expand', label: termTarget(ns) ? 'Consolle nel terminale del PC' : `Consolle esterna (${nativeConsole(ns).app})`, onClick: () => openNative([n]) },
+          isVm(tpl) && up && (termTarget(ns, tpl) || nativeConsole(ns)) && { icon: 'expand', label: termTarget(ns, tpl) ? 'Consolle nel terminale del PC' : `Consolle esterna (${nativeConsole(ns).app})`, onClick: () => openNative([n]) },
           hasDisks(tpl) && { icon: 'wipe', label: 'Azzera dischi (wipe)', disabled: !canDo(tpl, ns, 'wipe'), onClick: () => nodeAction(n, 'wipe') },
           isVm(tpl) && { sep: true },
           { icon: node.pinned ? 'unlock' : 'lock', label: node.pinned ? 'Sblocca posizione' : 'Blocca posizione', disabled: locked,
@@ -1180,6 +1182,8 @@ function Editor({ name, templates, onError, onBack, onReloadTemplates }) {
             </button>
             <button className="sb-btn" title={consoleMode === 'window' ? 'Consolle in finestre mobili sul foglio — clicca per metterle in basso' : 'Consolle in basso (dock) — clicca per aprirle in finestre mobili'}
               onClick={() => setConsoleMode((v) => (v === 'window' ? 'dock' : 'window'))}><Ui name="console" size={13} /> {consoleMode === 'window' ? 'Finestre' : 'In basso'}</button>
+            <button className={`sb-btn ${consoleTarget === 'native' ? 'on' : ''}`} title={consoleTarget === 'browser' ? 'Consolle nel browser — clicca per aprirle nel terminale del PC' : 'Consolle nel terminale del PC — clicca per aprirle nel browser'}
+              onClick={() => setConsoleTarget((v) => (v === 'browser' ? 'native' : 'browser'))}><Ui name="expand" size={13} /> {consoleTarget === 'browser' ? 'Browser' : 'Terminale PC'}</button>
             <button className="sb-btn" title={panMode ? 'Il trascinamento sposta il foglio — clicca per selezionare i nodi a riquadro' : 'Il trascinamento seleziona i nodi a riquadro — clicca per spostare il foglio'}
               onClick={() => setPanMode((v) => !v)}><Ui name={panMode ? 'hand' : 'select'} size={13} /> {panMode ? 'Sposta' : 'Seleziona'}</button>
             <button className={`sb-btn ${ifaceLabels === 'always' ? 'on' : ''}`} title="Mostra sempre i nomi delle interfacce"

@@ -307,54 +307,56 @@ export default function Console({ lab, node, visible, kind }) {
 }
 
 // EVE-NG style: each console as its own window, floating over the canvas — drag the bar, resize the corner.
+// one movable/resizable window holding every open console as a tab; switching a tab keeps the
+// others connected in the background, and a newly opened console comes up focused
 export function ConsoleWindows({ lab, items, kindOf, onClose }) {
-  const [wins, setWins] = useState({})
-  const topZ = useRef(20)
+  const [win, setWin] = useState({ x: 90, y: 72, w: 720, h: 460, min: false })
+  const [active, setActive] = useState(null)
+  const seen = useRef(new Set())
   useEffect(() => {
-    setWins((prev) => {
-      const next = {}
-      items.forEach((it, i) => { next[it.id] = prev[it.id] || { x: 90 + (i % 6) * 34, y: 70 + (i % 6) * 34, w: 660, h: 440, min: false, z: ++topZ.current } })
-      return next
-    })
+    const ids = items.map((it) => it.id)
+    const fresh = ids.filter((id) => !seen.current.has(id))
+    seen.current = new Set(ids)
+    setActive((a) => (fresh.length ? fresh[fresh.length - 1] : ids.includes(a) ? a : (ids[ids.length - 1] ?? null)))
   }, [items])
-  const upd = (n, patch) => setWins((w) => ({ ...w, [n]: { ...w[n], ...patch } }))
-  const front = (n) => upd(n, { z: ++topZ.current })
-  const grab = (n, e, mode) => {
-    e.preventDefault(); front(n)
-    const b = { ...wins[n] }, sx = e.clientX, sy = e.clientY
+  const upd = (patch) => setWin((w) => ({ ...w, ...patch }))
+  const grab = (e, mode) => {
+    e.preventDefault()
+    const b = { ...win }, sx = e.clientX, sy = e.clientY
     const move = (ev) => {
       const dx = ev.clientX - sx, dy = ev.clientY - sy
-      if (mode === 'move') upd(n, { x: Math.max(0, Math.min(b.x + dx, innerWidth - 120)), y: Math.max(48, Math.min(b.y + dy, innerHeight - 40)) })
-      else upd(n, { w: Math.max(340, b.w + dx), h: Math.max(200, b.h + dy) })
+      if (mode === 'move') upd({ x: Math.max(0, Math.min(b.x + dx, innerWidth - 120)), y: Math.max(48, Math.min(b.y + dy, innerHeight - 40)) })
+      else upd({ w: Math.max(360, b.w + dx), h: Math.max(220, b.h + dy) })
     }
     const up = () => { removeEventListener('mousemove', move); removeEventListener('mouseup', up) }
     addEventListener('mousemove', move); addEventListener('mouseup', up)
   }
+  if (!items.length) return null
+  if (win.min) return (
+    <div className="cwin-pills">
+      <button className="cwin-pill" title="Ripristina le consolle" onClick={() => upd({ min: false })}><Ui name="console" size={13} /> Consolle ({items.length})</button>
+    </div>
+  )
   return (
-    <>
-      {items.map((it) => {
-        const n = it.id, s = wins[n]
-        if (!s || s.min) return null
-        return (
-          <div key={n} className="cwin" style={{ left: s.x, top: s.y, width: s.w, height: s.h, zIndex: s.z }} onMouseDown={() => front(n)}>
-            <div className="cwin-head" onMouseDown={(e) => grab(n, e, 'move')}>
-              <Ui name="console" size={13} /><span className="grow">{it.node}</span>
-              <button className="cwin-btn" title="Riduci a icona" onMouseDown={(e) => e.stopPropagation()} onClick={() => upd(n, { min: true })}><Ui name="minus" size={14} /></button>
-              <button className="cwin-btn" title="Chiudi" onMouseDown={(e) => e.stopPropagation()} onClick={() => onClose(n)}><Ui name="close" size={14} /></button>
+    <div className="cwin" style={{ left: win.x, top: win.y, width: win.w, height: win.h, zIndex: 40 }}>
+      <div className="cwin-head">
+        <span className="cwin-drag" title="Trascina la finestra" onMouseDown={(e) => grab(e, 'move')}><Ui name="console" size={14} /></span>
+        <div className="cwin-tabs">
+          {items.map((it) => (
+            <div key={it.id} className={`tab ${it.id === active ? 'on' : ''}`} title={it.node} onMouseDown={(e) => { e.stopPropagation(); setActive(it.id) }}>
+              <span className="grow">{it.node}</span>
+              <button className="x" title="Chiudi scheda" onMouseDown={(e) => e.stopPropagation()} onClick={() => onClose(it.id)}>×</button>
             </div>
-            <div className="cwin-body"><Console lab={lab} node={it.node} visible kind={kindOf(it.node)} /></div>
-            <div className="cwin-grip" title="Ridimensiona" onMouseDown={(e) => grab(n, e, 'resize')} />
-          </div>
-        )
-      })}
-      {items.some((it) => wins[it.id]?.min) && (
-        <div className="cwin-pills">
-          {items.filter((it) => wins[it.id]?.min).map((it) => (
-            <button key={it.id} className="cwin-pill" title="Ripristina" onClick={() => upd(it.id, { min: false })}><Ui name="console" size={13} /> {it.node}</button>
           ))}
         </div>
-      )}
-    </>
+        <button className="cwin-btn" title="Riduci a icona" onClick={() => upd({ min: true })}><Ui name="minus" size={14} /></button>
+        <button className="cwin-btn" title="Chiudi tutte le consolle" onClick={() => items.forEach((it) => onClose(it.id))}><Ui name="close" size={14} /></button>
+      </div>
+      <div className="cwin-body">
+        {items.map((it) => <Console key={it.id} lab={lab} node={it.node} visible={it.id === active} kind={kindOf(it.node)} />)}
+      </div>
+      <div className="cwin-grip" title="Ridimensiona" onMouseDown={(e) => grab(e, 'resize')} />
+    </div>
   )
 }
 
