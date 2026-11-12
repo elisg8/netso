@@ -197,6 +197,77 @@ def cmd_import_labs(a: argparse.Namespace) -> None:
     print(f"\nImportati {done}/{len(files)} lab in «Genera lab» → categoria «I miei lab» (router: {a.router}).")
 
 
+def cmd_doctor(_a: argparse.Namespace) -> None:
+    """Controlli read-only dell'ambiente: utile prima del primo deploy reale sul server."""
+    import subprocess
+    OK, WARN, BAD = "OK", "!!", "XX"
+    rows: list[list[str]] = []
+
+    def add(state: bool | None, name: str, detail: str = "") -> None:
+        rows.append([OK if state is True else BAD if state is False else WARN, name, detail])
+
+    has = lambda c: shutil.which(c) is not None  # noqa: E731
+    linux = sys.platform.startswith("linux")
+    add(linux, "Sistema Linux", sys.platform if linux else f"NetSO gira su Linux (ora: {sys.platform})")
+
+    is_root = hasattr(os, "geteuid") and os.geteuid() == 0
+    add(None if not linux else is_root, "Utente root",
+        "ok" if is_root else "avvia come root (systemd) per rete, tap e KVM")
+
+    kvm = Path("/dev/kvm")
+    kvm_ok = kvm.exists() and os.access(kvm, os.R_OK | os.W_OK)
+    add(True if kvm_ok else None, "KVM (/dev/kvm)",
+        "accelerazione hardware attiva" if kvm_ok else "assente: VM lente o non avviabili (abilita VT-x/AMD-V, modprobe kvm)")
+
+    nested = ""
+    for p in ("/sys/module/kvm_intel/parameters/nested", "/sys/module/kvm_amd/parameters/nested"):
+        try:
+            nested = Path(p).read_text().strip()
+            break
+        except OSError:
+            continue
+    add(None, "Virtualizzazione annidata", {"Y": "attiva", "1": "attiva"}.get(nested, nested or "n/d (ok se NetSO è su hardware)"))
+
+    tun = Path("/dev/net/tun")
+    add(True if tun.exists() else None, "TAP (/dev/net/tun)", "ok" if tun.exists() else "assente: modprobe tun (serve per le NIC delle VM)")
+
+    # core=True → errore se manca; altrimenti avviso (serve solo per quella funzione)
+    for cmd, core, why in [("ip", True, "iproute2: bridge e interfacce"), ("qemu-system-x86_64", False, "VM QEMU/KVM"),
+                           ("docker", False, "container"), ("iptables", False, "NAT verso Internet"), ("dnsmasq", False, "DHCP del nodo NAT")]:
+        add(True if has(cmd) else (False if core else None), cmd, "ok" if has(cmd) else f"manca: {why}")
+
+    if has("docker"):
+        try:
+            r = subprocess.run(["docker", "info"], capture_output=True, timeout=6)
+            add(True if r.returncode == 0 else None, "Docker in esecuzione", "ok" if r.returncode == 0 else "il demone non risponde (systemctl start docker)")
+        except Exception:  # noqa: BLE001
+            add(None, "Docker in esecuzione", "il demone non risponde (systemctl start docker)")
+
+    iourc = settings.home / "iourc"
+    add(None, "Licenza IOL (iourc)", "presente" if iourc.is_file() else "assente (solo se usi Cisco IOL)")
+    iol_lib = settings.home / "iol-lib"
+    iol_ok = iol_lib.is_dir() and any(iol_lib.iterdir())
+    add(None, "Librerie IOL (iol-lib)", "presenti" if iol_ok else "assenti (solo se usi Cisco IOL)")
+
+    for label, d in [("home", settings.home), ("immagini", settings.images), ("template", settings.user_template_dir())]:
+        ok = d.is_dir() and os.access(d, os.W_OK)
+        add(ok, f"Cartella {label}", str(d) if ok else f"non esiste o non scrivibile: {d}")
+
+    try:
+        info = dict(line.split(":", 1) for line in Path("/proc/meminfo").read_text().splitlines() if ":" in line)
+        avail = int(info["MemAvailable"].split()[0]) // 1024
+        add(avail > 1024, "RAM disponibile", f"{avail} MB" + ("" if avail > 1024 else " (poca per le VM)"))
+    except (OSError, KeyError, ValueError):
+        pass
+
+    _print_table(rows, ["", "Controllo", "Dettaglio"])
+    bad = sum(1 for r in rows if r[0] == BAD)
+    print()
+    print("Tutto a posto per un avvio reale." if not bad else f"{bad} problema/i da risolvere prima del deploy reale.")
+    if bad:
+        sys.exit(1)
+
+
 def main(argv: list[str] | None = None) -> None:
     p = argparse.ArgumentParser(prog="netso", description="NetSO - lab di rete all-in-one")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -226,6 +297,7 @@ def main(argv: list[str] | None = None) -> None:
     s.add_argument("node")
     s.set_defaults(func=cmd_console)
 
+    sub.add_parser("doctor", help="controlla l'ambiente prima del primo deploy reale (KVM, tap, docker, IOL…)").set_defaults(func=cmd_doctor)
     sub.add_parser("templates", help="elenca i template").set_defaults(func=cmd_templates)
     sub.add_parser("images", help="elenca le immagini QEMU").set_defaults(func=cmd_images)
     s = sub.add_parser("pull", help="scarica immagini Docker (senza argomenti: quelle dei dispositivi che mancano)")
