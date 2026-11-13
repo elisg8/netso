@@ -1,7 +1,7 @@
 name: cisco-iol-l2
 title: Cisco IOL Switch L2
 kind: iol
-description: Cisco IOL L2 (switch con VLAN, STP, trunk), eseguito direttamente come in EVE-NG/GNS3 con il tuo file .bin e la tua licenza iourc.
+description: Cisco IOL L2 (switch with VLAN, STP, trunk), run directly like in EVE-NG/GNS3 with your .bin file and your iourc license.
 icon: switch
 vendor: Cisco
 image: iol-l2

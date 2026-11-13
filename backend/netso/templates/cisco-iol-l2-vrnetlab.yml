@@ -1,7 +1,7 @@
 name: cisco-iol-l2-vrnetlab
 title: Cisco IOL Switch (vrnetlab)
 kind: docker
-description: Cisco IOL L2 in container vrnetlab (alternativa al nativo) — costruisci tu l'immagine con il tuo IOL L2. Da verificare.
+description: Cisco IOL L2 in a vrnetlab container (alternative to native) — build the image yourself with your IOL L2. To be verified.
 icon: switch
 vendor: Cisco
 image: vrnetlab/cisco_iol:L2-17.12.01

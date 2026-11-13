@@ -1,7 +1,7 @@
 name: fortigate
 title: Fortinet FortiGate
 kind: qemu
-description: FortiGate VM (KVM). Immagine Fortinet, non inclusa.
+description: FortiGate VM (KVM). Fortinet image, not included.
 icon: firewall
 image: fortigate
 cpus: 1

@@ -1,7 +1,7 @@
 name: arista-ceos
 title: Arista cEOS
 kind: docker
-description: Arista cEOS-lab (container). Immagine da arista.com, da importare con 'docker import' come ceos:latest. Da verificare.
+description: Arista cEOS-lab (container). Image from arista.com, import with 'docker import' as ceos:latest. To be verified.
 icon: l3switch
 vendor: Arista
 console_user: admin

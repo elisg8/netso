@@ -198,7 +198,7 @@ def cmd_import_labs(a: argparse.Namespace) -> None:
 
 
 def cmd_doctor(_a: argparse.Namespace) -> None:
-    """Controlli read-only dell'ambiente: utile prima del primo deploy reale sul server."""
+    """Read-only environment checks: useful before the first real deploy on the server."""
     import subprocess
     OK, WARN, BAD = "OK", "!!", "XX"
     rows: list[list[str]] = []
@@ -231,7 +231,7 @@ def cmd_doctor(_a: argparse.Namespace) -> None:
     tun = Path("/dev/net/tun")
     add(True if tun.exists() else None, "TAP (/dev/net/tun)", "ok" if tun.exists() else "missing: modprobe tun (needed for VM NICs)")
 
-    # core=True → errore se manca; altrimenti avviso (serve solo per quella funzione)
+    # core=True → error if missing; otherwise a warning (only needed for that feature)
     for cmd, core, why in [("ip", True, "iproute2: bridges and interfaces"), ("qemu-system-x86_64", False, "QEMU/KVM VMs"),
                            ("docker", False, "containers"), ("iptables", False, "NAT to the Internet"), ("dnsmasq", False, "NAT node DHCP")]:
         add(True if has(cmd) else (False if core else None), cmd, "ok" if has(cmd) else f"missing: {why}")

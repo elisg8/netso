@@ -1,7 +1,7 @@
 name: cisco-iol
 title: Cisco IOL Router
 kind: iol
-description: Cisco IOL (IOS on Linux) L3, eseguito direttamente come in EVE-NG/GNS3 con il tuo file .bin e la tua licenza iourc. Leggero, si avvia in pochi secondi.
+description: Cisco IOL (IOS on Linux) L3, run directly like in EVE-NG/GNS3 with your .bin file and your iourc license. Lightweight, boots in a few seconds.
 icon: router
 vendor: Cisco
 image: iol-l3

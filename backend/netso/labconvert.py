@@ -109,13 +109,13 @@ def _verify_for(topic: str) -> list[str]:
 def _guide(name: str, topic: str, devs: dict, routers: list[str], bridges: list[str], nets: dict) -> str:
     """An original guide built only from the lab's own addressing + generic verification commands."""
     label = topic or name
-    out = [f"# Lab: {label}", "", "## Obiettivo",
-           f"Configura **{label}** su questa topologia e verifica la raggiungibilità end-to-end "
-           "(le interfacce partono già indirizzate: tocca a te il protocollo).", ""]
-    out.append(f"## Dispositivi ({len(routers)} router" + (f" + {len(bridges)} switch" if bridges else "") + ")")
-    out += [f"- **{', '.join(routers)}**"] + ([f"- switch: {', '.join(bridges)}"] if bridges else [])
-    out += ["", "## Indirizzi IP (già impostati)", "",
-            "| Dispositivo | Interfaccia | Indirizzo |", "|---|---|---|"]
+    out = [f"# Lab: {label}", "", "## Objective",
+           f"Configure **{label}** on this topology and verify end-to-end reachability "
+           "(the interfaces start already addressed: the protocol is up to you).", ""]
+    out.append(f"## Devices ({len(routers)} routers" + (f" + {len(bridges)} switches" if bridges else "") + ")")
+    out += [f"- **{', '.join(routers)}**"] + ([f"- switches: {', '.join(bridges)}"] if bridges else [])
+    out += ["", "## IP addresses (already set)", "",
+            "| Device | Interface | Address |", "|---|---|---|"]
     for d in routers:
         addrs = {}  # iface -> ["ip/pfx", ...]
         for i, (ip, m) in devs[d]["ifaces"].items():
@@ -128,13 +128,13 @@ def _guide(name: str, topic: str, devs: dict, routers: list[str], bridges: list[
             continue
         for j, i in enumerate(order):
             out.append(f"| {f'**{d}**' if j == 0 else ''} | `{i}` | {' '.join(addrs[i])} |")
-    out += ["", "## Collegamenti"]
+    out += ["", "## Links"]
     for net in sorted(nets, key=str):
         eps = nets[net]
         if len(eps) >= 2:
             out.append(f"- `{net.with_prefixlen}` — " + " ↔ ".join(f"{d}:{i}" for d, i in eps))
-    out += ["", "## Verifica"] + [f"- `{c}`" for c in _verify_for(topic)]
-    out += ["", "_Guida generata automaticamente da NetSO dalle config iniziali del lab._"]
+    out += ["", "## Verification"] + [f"- `{c}`" for c in _verify_for(topic)]
+    out += ["", "_Guide generated automatically by NetSO from the lab's initial configs._"]
     return "\n".join(out)
 
 
@@ -187,7 +187,7 @@ def convert(name: str, text: str, templates: dict[str, Template], router: str = 
     # strand a device when its real link runs through an L2 switch that carries no IP, or
     # when the peer address wasn't in the paste. Stitch every orphan piece to the main
     # topology's hub with an extra L1 link (the addresses won't match — the student
-    # re-addresses it) so «Genera lab» always produces a connected lab.
+    # re-addresses it) so «Generate lab» always produces a connected lab.
     adj: dict[str, set] = {}
     deg: dict[str, int] = {}
     for lk in links:
@@ -228,7 +228,7 @@ def convert(name: str, text: str, templates: dict[str, Template], router: str = 
             u = _anchor(comp)
             if u in routers and hub in routers:   # only stitch real routers (lone switches stay as-is)
                 links.append(Link(endpoints=[f"{u}:{_free(u)}", f"{hub}:{_free(hub)}"],
-                                  style="dashed", label="aggiunto da NetSO · reindirizza"))
+                                  style="dashed", label="added by NetSO · re-address"))
 
     # layout: routers on a circle, bridges in the middle
     n = len(routers)

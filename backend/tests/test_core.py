@@ -1721,11 +1721,11 @@ def test_generate_scenario_api():
     lab = topo.load_lab("ospf-lab")
     assert len(lab.nodes) == 5 and all(n.template == "frr" for n in lab.nodes)   # count honoured
     assert any(n.startup_config for n in lab.nodes)
-    assert lab.instructions and "Soluzione" in lab.instructions                  # guide included
+    assert lab.instructions and "Solution" in lab.instructions                  # guide included
     assert any(ln.label and "/30" in ln.label for ln in lab.links)              # IPs on the links
     base = topo.read_configs("ospf-lab", "default")          # boots with IP addressing only…
     assert base and all("ip address" in v and "router ospf" not in v for v in base.values())
-    sol = topo.read_configs("ospf-lab", "soluzione")         # …the protocol lives in the «soluzione» set
+    sol = topo.read_configs("ospf-lab", "solution")         # …the protocol lives in the «soluzione» set
     assert sol and all("router ospf" in v for v in sol.values())
     # unknown scenario -> 400
     assert c.post("/api/labs/generate", json={"name": "zz", "scenario": "nope"}).status_code == 400
@@ -1803,9 +1803,9 @@ def test_assistant_lab_context():
     assert r.status_code == 200
     txt = r.json()["text"]
     # the assistant received the whole lab: topology, links and the applied (base) config
-    assert "Contesto del lab" in txt and "Collegamenti" in txt
+    assert "NetSO lab context" in txt and "Links" in txt
     assert "ip address" in txt and "interface eth" in txt        # the base config (IP addressing) is applied
-    assert "bloccato soprattutto sul nodo «r1»" in txt           # node focus
+    assert "mainly stuck on node «r1»" in txt           # node focus
     assert "LDP non si forma" in txt                             # the user's question
 
 
@@ -1857,8 +1857,8 @@ def test_assistant_chat_history():
     r = c.post(f"/api/agents/{a['id']}/ask", json={"prompt": "e il secondo?",
                "history": [{"role": "user", "text": "primo messaggio"}, {"role": "assistant", "text": "prima risposta"}]})
     txt = r.json()["text"]
-    assert "Conversazione finora" in txt and "primo messaggio" in txt and "prima risposta" in txt
-    assert "Nuovo messaggio dell'utente" in txt and "e il secondo?" in txt
+    assert "Conversation so far" in txt and "primo messaggio" in txt and "prima risposta" in txt
+    assert "New message from the user" in txt and "e il secondo?" in txt
 
 
 def test_status_api():

@@ -1,7 +1,7 @@
 name: sonic-vs
 title: SONiC VS
 kind: docker
-description: SONiC virtual switch (container docker-sonic-vs). Immagine da sonic-net, da caricare con 'docker load'. Da verificare.
+description: SONiC virtual switch (docker-sonic-vs container). Image from sonic-net, load with 'docker load'. To be verified.
 icon: l3switch
 vendor: SONiC
 console_user: admin

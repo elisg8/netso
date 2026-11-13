@@ -1,7 +1,7 @@
 name: cisco-iosvl2
 title: Cisco vIOS Switch L2
 kind: qemu
-description: Cisco IOSvL2 (switch). Immagine da Cisco/CML, non inclusa.
+description: Cisco IOSvL2 (switch). Image from Cisco/CML, not included.
 icon: switch
 image: cisco-iosvl2
 cpus: 1

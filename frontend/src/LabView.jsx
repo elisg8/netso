@@ -346,8 +346,8 @@ function Editor({ name, templates, onError, onBack, onReloadTemplates }) {
     addEventListener('pointermove', move); addEventListener('pointerup', up)
   }
   const [activeConsole, setActiveConsole] = useState(null)
-  const [consoleMode, setConsoleMode] = usePref('netso.consoleMode', 'window') // 'window' = finestre mobili (predefinito) · 'dock' = in basso
-  const [consoleTarget, setConsoleTarget] = usePref('netso.consoleTarget', 'browser') // 'browser' = terminale nel browser · 'native' = terminale del PC
+  const [consoleMode, setConsoleMode] = usePref('netso.consoleMode', 'window') // 'window' = floating windows (default) · 'dock' = at the bottom
+  const [consoleTarget, setConsoleTarget] = usePref('netso.consoleTarget', 'browser') // 'browser' = terminal in the browser · 'native' = terminal on the PC
   const [yaml, setYaml] = useState(null)
   const [menu, setMenu] = useState(null) // right-click menu {kind:'pane'|'node'|'edge'|'selection', x, y, id?, pos?}
   const [addDlg, setAddDlg] = useState(null) // {pos} "add a new node" dialog
@@ -357,7 +357,7 @@ function Editor({ name, templates, onError, onBack, onReloadTemplates }) {
   const [capDlg, setCapDlg] = useState(null) // {node?, iface?} packet capture window
   const [extHelpSeen, setExtHelpSeen] = usePref('netso.extConsoleHelpSeen', false)
   const [showExtHelp, setShowExtHelp] = useState(false)
-  const [pulls, setPulls] = useState([]) // immagini Docker in scaricamento dal lab [{id, ref, status, message}]
+  const [pulls, setPulls] = useState([]) // Docker images being pulled from the lab [{id, ref, status, message}]
   const [caps, setCaps] = useState([]) // packet captures of this lab
   const [wsWins, setWsWins] = useState([]) // in-browser Wireshark windows [{session, peer, min}]
   const [wsSessions, setWsSessions] = useState([]) // Wireshark sessions running on the server (any tab)
@@ -701,7 +701,7 @@ function Editor({ name, templates, onError, onBack, onReloadTemplates }) {
       .catch((e) => { w?.close(); onError(e) })
   }
   const openConsoles = (nodes) => {
-    if (consoleTarget === 'native') {  // apri nel terminale del PC; le console web (http/https) restano nel browser
+    if (consoleTarget === 'native') {  // open in the PC terminal; web consoles (http/https) stay in the browser
       const web = nodes.filter((n) => ['http', 'https'].includes(consoleKind(state?.nodes?.[n])))
       web.forEach((n) => openWeb(n, consoleKind(state.nodes[n])))
       const rest = nodes.filter((n) => !web.includes(n))
@@ -761,21 +761,21 @@ function Editor({ name, templates, onError, onBack, onReloadTemplates }) {
       ? { term: `ssh ${t.user}@${H}`, winGui: `putty -ssh ${t.user}@${H} -P ${P}`, winCli: `ssh ${t.user}@${H}` }
       : { term: `telnet ${H} ${P}`, winGui: `putty -telnet ${H} -P ${P}`, winCli: `telnet ${H} ${P}` }
     if (os === 'win') {
-      const need = ssh ? 'un client SSH (PuTTY o OpenSSH)' : 'PuTTY o il «Client Telnet» di Windows'
+      const need = ssh ? 'an SSH client (PuTTY or OpenSSH)' : 'PuTTY or the Windows «Telnet Client»'
       return { name: `console-${safe}.bat`, text: [
         '@echo off', `title NetSO - ${safe}`,
         `where putty >nul 2>nul && (start "" ${run.winGui} & exit /b)`,
         `where ${ssh ? 'ssh' : 'telnet'} >nul 2>nul && (start "" ${run.winCli} & exit /b)`,
-        `echo Serve ${need}. Scarica PuTTY da https://www.putty.org`, 'pause', '',
+        `echo ${need} is required. Download PuTTY from https://www.putty.org`, 'pause', '',
       ].join('\r\n') }
     }
     if (os === 'mac') {
       const body = ssh
         ? `exec ${run.term}`
         : [`command -v telnet >/dev/null 2>&1 && exec ${run.term}`,
-           `command -v nc >/dev/null 2>&1 && { echo "(telnet assente, uso nc)"; exec nc ${H} ${P}; }`,
-           'echo "Manca telnet: installalo con  brew install telnet"',
-           'read -n1 -r -p "Premi un tasto per chiudere..."'].join('\n')
+           `command -v nc >/dev/null 2>&1 && { echo "(telnet missing, using nc)"; exec nc ${H} ${P}; }`,
+           'echo "telnet missing: install it with  brew install telnet"',
+           'read -n1 -r -p "Press a key to close..."'].join('\n')
       return { name: `console-${safe}.command`, text: ['#!/bin/bash', `# NetSO console: ${safe}`, 'clear',
         `echo "NetSO -> ${safe}  (${run.term})"`, body, ''].join('\n') }
     }
@@ -801,7 +801,7 @@ function Editor({ name, templates, onError, onBack, onReloadTemplates }) {
     if (terminals.length && !extHelpSeen) setShowExtHelp(true)
   }
 
-  // scarica l'immagine Docker di un nodo container direttamente dal lab (job con avanzamento)
+  // pull a container node's Docker image directly from the lab (job with progress)
   const nodeImage = (n) => { const x = lab.nodes.find((y) => y.name === n); return x?.image || tplOf(n)?.image }
   const needsImage = (n) => { const tp = tplOf(n); return tp?.kind === 'docker' && tp.ready === false }
   const pullImage = async (ref) => {
@@ -866,7 +866,7 @@ function Editor({ name, templates, onError, onBack, onReloadTemplates }) {
     onBack()
   }
 
-  // autosave: persist edits a moment after they happen, so nothing is lost if you leave without pressing Salva
+  // autosave: persist edits a moment after they happen, so nothing is lost if you leave without pressing Save
   useEffect(() => {
     if (!dirty || readOnly) return
     const tm = setTimeout(() => save(true), 1000)

@@ -1,7 +1,7 @@
 name: nat
 title: Internet (NAT)
 kind: nat
-description: Internet per il lab tramite NAT del server, con DHCP (rete 172.31.x.0/24 o personalizzata).
+description: Internet for the lab via the server's NAT, with DHCP (172.31.x.0/24 network or custom).
 icon: cloud
 nics: 16
 console: none

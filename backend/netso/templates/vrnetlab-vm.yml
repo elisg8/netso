@@ -1,7 +1,7 @@
 name: vrnetlab-vm
 title: vrnetlab VM
 kind: docker
-description: "Qualsiasi VM impacchettata con vrnetlab (vMX, XRv9k, Nexus 9000v, ASAv, PAN…) — cambia l'immagine nel nodo. Consolle sulla porta 5000. Da verificare."
+description: "Any VM packaged with vrnetlab (vMX, XRv9k, Nexus 9000v, ASAv, PAN…) — change the image on the node. Console on port 5000. To be verified."
 icon: router
 image: vrnetlab/vr-vmx:latest
 ram: 4096

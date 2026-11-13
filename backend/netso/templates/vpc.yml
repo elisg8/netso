@@ -1,7 +1,7 @@
 name: vpc
 title: Virtual PC (VPCS)
 kind: docker
-description: PC virtuale leggerissimo stile VPCS (ip, ping, trace, dhcp). Container Alpine.
+description: Ultra-lightweight virtual PC, VPCS-style (ip, ping, trace, dhcp). Alpine container.
 icon: host
 image: alpine:latest
 cpus: 1

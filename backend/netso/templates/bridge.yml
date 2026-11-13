@@ -1,7 +1,7 @@
 name: bridge
 title: Switch (bridge)
 kind: bridge
-description: Switch L2 (bridge Linux) con VLAN access/trunk per porta.
+description: L2 switch (Linux bridge) with per-port access/trunk VLANs.
 icon: bridge
 nics: 16
 console: none

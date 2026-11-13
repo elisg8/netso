@@ -4,77 +4,75 @@
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue.svg)
 ![React](https://img.shields.io/badge/ui-React%2019-61dafb.svg)
 
-Piattaforma open source per lab di rete: **VM QEMU/KVM** (Cisco, Fortinet, VyOS, Linux…) e **container Docker** (FRR, host Linux…) nello stesso lab. Puoi disegnare la topologia nel browser oppure definirla in YAML, e ogni nodo ha la sua consolle nel browser. Il tutto si controlla anche da riga di comando o via API REST.
+Open-source platform for network labs: run **QEMU/KVM VMs** (Cisco, Fortinet, VyOS, Linux…) and **Docker containers** (FRR, Linux hosts…) in the same lab. Draw the topology in your browser or define it in YAML, and every node gets its own console in the browser. It can all be driven from the command line or via the REST API too — a self-hosted network simulation.
 
-> **EN —** Open-source all-in-one network lab platform: run **QEMU/KVM VMs** and **Docker containers** in the same topology, straight from your browser, CLI, or REST API. A self-hosted network simulation.
+![NetSO — topology editor](docs/screenshot.png)
 
-![NetSO — editor della topologia](docs/screenshot.png)
+## Features
 
-## Funzionalità
+**Node types**
+- **QEMU/KVM VMs** with a copy-on-write overlay (the base image is never touched), telnet serial console, VNC, and SPICE.
+- **Docker containers** (FRR, Linux hosts, cEOS, SR Linux, cRPD, SONiC…), with a dedicated management network.
+- **Bridge switch** with per-port VLANs (802.1Q via `bridge vlan`).
+- **NAT node** to the outside world (bridge + IP + iptables MASQUERADE + dnsmasq DHCP).
+- Lightweight **VPC** in the VPCS style, to generate traffic and ping.
+- Native **Cisco IOL** (your own `.bin` and your own `iourc` license) and **Dynamips** (c7200/c3725).
+- **VXLAN** to join labs across different servers.
 
-**Tipi di nodo**
-- **VM QEMU/KVM** con overlay copy-on-write (l'immagine base non si tocca), consolle seriale telnet, VNC e SPICE.
-- **Container Docker** (FRR, host Linux, cEOS, SR Linux, cRPD, SONiC…), con rete di gestione dedicata.
-- **Switch bridge** con VLAN per porta (802.1Q via `bridge vlan`).
-- **Nodo NAT** verso l'esterno (bridge + IP + MASQUERADE iptables + DHCP dnsmasq).
-- **VPC** leggero in stile VPCS per generare traffico e fare ping.
-- **Cisco IOL** nativo (il tuo `.bin` e la tua licenza `iourc`) e **Dynamips** (c7200/c3725).
-- **VXLAN** per unire lab su server diversi.
+**Topology editor**
+- Browser canvas (draw and connect nodes) **or** definition in **YAML**.
+- Automatic interface assignment; **hot-plug**: connect and disconnect cables with the lab running.
+- Drawings and annotations (text, rectangles, ellipses, arrows, images), line styles and curvature.
+- Original icons in several styles (Modern, Classic 3D, Line, Rack).
 
-**Editor della topologia**
-- Canvas nel browser (disegna e collega i nodi) **oppure** definizione in **YAML**.
-- Assegnazione automatica delle interfacce; **hot-plug**: colleghi e scolleghi i cavi a lab avviato.
-- Disegni e annotazioni (testo, rettangoli, ellissi, frecce, immagini), stili di linea e curvatura.
-- Icone originali in più stili (Modern, Classic 3D, Line, Rack).
+**Console in the browser**
+- **telnet** serial (xterm), **VNC** (noVNC), **RDP** (Apache Guacamole), **SSH**, **SPICE**, and forwarding for HTTP/HTTPS/WinBox.
+- Floating windows on the sheet or docked at the bottom; several consoles open at once.
+- **Mac↔VM clipboard** bridge (copy/paste between host and guest).
 
-**Consolle nel browser**
-- Seriale **telnet** (xterm), **VNC** (noVNC), **RDP** (Apache Guacamole), **SSH**, **SPICE**, e inoltro per HTTP/HTTPS/WinBox.
-- Finestre mobili sul foglio oppure dock in basso; più consolle aperte insieme.
-- Ponte **appunti Mac↔VM** (copia/incolla tra host e guest).
-
-**Immagini**
-- Gestore immagini: upload in streaming, conversione in qcow2, download da URL, ISO refplat CML, checksum MD5, con lavori in background.
-- Import delle immagini da **EVE-NG / PNETLab** (cartella locale o via SSH+rsync) e gestione delle immagini **Docker** (`pull` con avanzamento, `load` di `.tar`).
+**Images**
+- Image manager: streaming upload, conversion to qcow2, download from a URL, CML refplat ISOs, MD5 checksums, with background jobs.
+- Image import from **EVE-NG / PNETLab** (local folder or over SSH+rsync) and **Docker** image management (`pull` with progress, `load` of `.tar`).
 
 **Import / Export**
-- Import da **Containerlab, CML, GNS3, EVE-NG (.unl)**; export verso **Containerlab** e **CML**.
-- Import di node/image definition **CML** e appliance **GNS3** (`.gns3a`) come template.
+- Import from **Containerlab, CML, GNS3, EVE-NG (.unl)**; export to **Containerlab** and **CML**.
+- Import of **CML** node/image definitions and **GNS3** appliances (`.gns3a`) as templates.
 
-**Automazione e scenari**
-- Generatori di topologia: **clos, ring, mesh, star, chain**.
-- **Genera lab**: scenari didattici pronti (OSPF, BGP, MPLS L3VPN, VRRP, multicast, filtri, sicurezza BGP…) **multi-vendor** (FRR e Cisco IOS).
-- Inventario **Ansible** / hosts / SSH generato dal lab.
+**Automation and scenarios**
+- Topology generators: **clos, ring, mesh, star, chain**.
+- **Generate lab**: ready-made teaching scenarios (OSPF, BGP, MPLS L3VPN, VRRP, multicast, filters, BGP security…), **multi-vendor** (FRR and Cisco IOS).
+- **Ansible** inventory / hosts / SSH generated from the lab.
 
-**Config, snapshot e multi-utente**
-- Set di **startup-config** e salvataggio della running-config (via `docker exec` o consolle seriale).
-- **Snapshot** del lab (topologia + config + snapshot interni qcow2).
-- Login utenti (PBKDF2), ruoli **admin / user / viewer**, permessi per lab (owner/edit/view) e condivisione; più server NetSO.
+**Config, snapshots, and multi-user**
+- **startup-config** sets and saving of the running-config (via `docker exec` or the serial console).
+- Lab **snapshots** (topology + config + internal qcow2 snapshots).
+- User login (PBKDF2), **admin / user / viewer** roles, per-lab permissions (owner/edit/view) and sharing; multiple NetSO servers.
 
-**Strumenti**
-- **Cattura pacchetti** con Wireshark nel browser.
-- **NetSO Assistant** (AI): assistente che legge la topologia e **esegue comandi di sola lettura sui nodi** del lab avviato (provider locali come Ollama).
-- CLI `netso` e **API REST + WebSocket**.
+**Tools**
+- **Packet capture** with Wireshark in the browser.
+- **NetSO Assistant** (AI): an assistant that reads the topology and **runs read-only commands on the nodes** of a running lab (local providers such as Ollama).
+- `netso` CLI and **REST API + WebSocket**.
 
-> ⚠️ **Stato del progetto.** NetSO è giovane ed è stato provato soprattutto in modalità *dry-run* durante lo sviluppo: i primi avvii su hardware reale potrebbero richiedere correzioni. I contributi sono benvenuti — vedi [CONTRIBUTING.md](CONTRIBUTING.md).
+> ⚠️ **Project status.** NetSO is young and has mostly been tried in *dry-run* mode during development: the first runs on real hardware may need fixes. Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md).
 
-## Requisiti
+## Requirements
 
-- Server Linux bare metal: Ubuntu 22.04/24.04 o Debian 12
-- CPU con VT-x/AMD-V abilitato nel BIOS (`/dev/kvm` deve esistere)
-- RAM in quantità adeguata ai nodi (es. un IOSv usa 768 MB, un Cat8000v 4 GB)
+- Bare-metal Linux server: Ubuntu 22.04/24.04 or Debian 12
+- CPU with VT-x/AMD-V enabled in the BIOS (`/dev/kvm` must exist)
+- Enough RAM for your nodes (e.g. an IOSv uses 768 MB, a Cat8000v 4 GB)
 
-## Installazione
+## Installation
 
 ```bash
 unzip netso.zip && cd netso
 sudo ./install.sh
 ```
 
-Alla fine lo script stampa l'indirizzo (`http://IP-SERVER:8080`) e il **token di accesso**, che trovi anche in `/etc/netso.env`. Il servizio si chiama `netso` (`systemctl status netso`, `journalctl -u netso -f`).
+When it finishes, the script prints the address (`http://SERVER-IP:8080`) and the **access token**, which you can also find in `/etc/netso.env`. The service is called `netso` (`systemctl status netso`, `journalctl -u netso -f`).
 
-## Immagini delle VM
+## VM images
 
-Le immagini non sono incluse: vanno prese dal vendor con la relativa licenza (ad esempio IOSv/IOSvL2 dall'abbonamento CML, FortiGate dal portale Fortinet). Ogni immagine va in una sua cartella, con il nome usato nel template:
+Images are not included: get them from the vendor with the appropriate license (for example IOSv/IOSvL2 from a CML subscription, FortiGate from the Fortinet portal). Each image goes in its own folder, named after the template:
 
 ```
 /opt/netso/images/
@@ -86,37 +84,37 @@ Le immagini non sono incluse: vanno prese dal vendor con la relativa licenza (ad
 └── linux-vm/        virtioa.qcow2
 ```
 
-Se una cartella contiene più dischi, vengono collegati in ordine alfabetico. Ogni nodo lavora su un overlay copy-on-write: l'immagine base non viene mai toccata e "Azzera dischi" riporta il nodo allo stato di fabbrica. Le immagini Docker invece vengono scaricate da sole al primo avvio.
+If a folder contains several disks, they are attached in alphabetical order. Each node works on a copy-on-write overlay: the base image is never touched, and "Wipe disks" returns the node to factory state. Docker images, on the other hand, are downloaded automatically on first start.
 
-## Uso dal browser
+## Using it from the browser
 
-1. Crea un nuovo lab e trascina i dispositivi dalla palette di sinistra.
-2. Per collegare due nodi, trascina dal pallino in alto di un nodo fino all'altro: le interfacce libere vengono assegnate automaticamente, e cliccando sul collegamento puoi cambiarle.
-3. Premi **Deploy** e fai doppio clic su un nodo avviato per aprirne la consolle.
-4. Le VM con consolle grafica sono raggiungibili via VNC all'indirizzo mostrato nel pannello del nodo.
+1. Create a new lab and drag devices from the palette on the left.
+2. To connect two nodes, drag from the dot at the top of one node to the other: free interfaces are assigned automatically, and clicking the link lets you change them.
+3. Press **Deploy** and double-click a running node to open its console.
+4. VMs with a graphical console are reachable via VNC at the address shown in the node panel.
 
-Scorciatoie: `Canc` elimina la selezione, `Ctrl+S` salva.
+Shortcuts: `Del` removes the selection, `Ctrl+S` saves.
 
-## Uso da riga di comando (lab come codice)
+## Using it from the command line (labs as code)
 
 ```bash
-netso templates                    # tipi di nodo disponibili
-netso images                       # immagini QEMU trovate
+netso templates                    # available node types
+netso images                       # QEMU images found
 netso deploy /opt/netso/containers-only.yml
 netso list
-netso console containers-only h1   # consolle nel terminale
-netso inspect containers-only      # stato, porte telnet/VNC
-netso destroy containers-only      # aggiungi --delete per eliminarlo
+netso console containers-only h1   # console in the terminal
+netso inspect containers-only      # status, telnet/VNC ports
+netso destroy containers-only      # add --delete to remove it
 ```
 
-Formato di un lab:
+Format of a lab:
 
 ```yaml
 name: ospf-mix
-description: Due IOSv, un FRR e due host su uno switch
+description: Two IOSv, one FRR, and two hosts on a switch
 nodes:
   - {name: r1,   template: cisco-iosv}
-  - {name: r2,   template: cisco-iosv, ram: 1024}   # override del template
+  - {name: r2,   template: cisco-iosv, ram: 1024}   # template override
   - {name: frr1, template: frr}
   - {name: sw1,  template: bridge}
   - {name: pc1,  template: linux-host}
@@ -130,92 +128,90 @@ links:
   - endpoints: [pc2:eth1, sw1:port3]
 ```
 
-Ogni link è un cavo punto-punto. Per mettere più nodi sullo stesso segmento si usa un nodo `bridge`, mentre per uscire sulla rete reale si usa un nodo `external` legato a un bridge già presente sull'host (es. `br0`).
+Every link is a point-to-point cable. To put several nodes on the same segment use a `bridge` node, and to reach the real network use an `external` node bound to a bridge already present on the host (e.g. `br0`).
 
-### Condizionamento dei link
+### Link conditioning
 
-Ogni link può simulare una rete reale con ritardo, jitter, perdita di pacchetti e banda limitata (via `tc netem`):
+Every link can simulate a real network with delay, jitter, packet loss, and limited bandwidth (via `tc netem`):
 
 ```yaml
 links:
   - endpoints: [r1:Gi0/0, r2:Gi0/0]
-    delay_ms: 50        # latenza aggiunta per direzione (RTT ≈ 100 ms)
-    jitter_ms: 10       # variazione casuale attorno al ritardo
-    loss_pct: 2         # 2% di pacchetti persi
-    rate_kbit: 1000     # banda massima 1 Mbit/s
+    delay_ms: 50        # latency added per direction (RTT ≈ 100 ms)
+    jitter_ms: 10       # random variation around the delay
+    loss_pct: 2         # 2% of packets dropped
+    rate_kbit: 1000     # maximum bandwidth 1 Mbit/s
 ```
 
-I campi sono tutti opzionali (vuoto = cavo ideale). Dal browser si impostano nel pannello del collegamento; con il lab avviato il pulsante «Applica ora» li attiva a caldo senza riavviare i nodi.
+The fields are all optional (empty = ideal cable). In the browser they are set in the link panel; with the lab running, the «Apply now» button activates them live without restarting the nodes.
 
-Nei container, `eth0` è riservata alla rete di management Docker (`netso-mgmt`, con accesso a Internet) e le interfacce del lab partono da `eth1`.
+In containers, `eth0` is reserved for the Docker management network (`netso-mgmt`, with Internet access) and the lab interfaces start from `eth1`.
 
-## Template personalizzati
+## Custom templates
 
-Ogni file `.yml` in `/opt/netso/templates/` aggiunge un tipo di nodo oppure sovrascrive quello integrato con lo stesso nome. Esempio:
+Each `.yml` file in `/opt/netso/templates/` adds a node type or overrides the built-in one with the same name. Example:
 
 ```yaml
 name: cisco-ftdv
 kind: qemu
 description: Cisco FTDv
 icon: firewall          # router | switch | firewall | server | host | cloud
-image: cisco-ftdv       # cartella in /opt/netso/images
+image: cisco-ftdv       # folder in /opt/netso/images
 cpus: 4
 ram: 8192
 nics: 6
-nic_model: virtio-net-pci   # oppure e1000, vmxnet3...
+nic_model: virtio-net-pci   # or e1000, vmxnet3...
 disk_bus: virtio            # virtio | ide | sata
 console: telnet             # telnet | vnc
 iface_prefix: Gi0/
 iface_start: 0
-extra_args: []              # argomenti QEMU aggiuntivi
+extra_args: []              # extra QEMU arguments
 ```
 
-Per un container si usa invece `kind: docker`, indicando `image:` (immagine Docker), `cmd:` ed eventuali `env:`.
+For a container use `kind: docker` instead, specifying `image:` (Docker image), `cmd:`, and any `env:`.
 
-## API REST
+## REST API
 
-La documentazione interattiva è su `http://IP-SERVER:8080/docs`. Le chiamate richiedono l'header `Authorization: Bearer <token>`.
+The interactive documentation is at `http://SERVER-IP:8080/docs`. Calls require the `Authorization: Bearer <token>` header.
 
-| Metodo | Percorso | Funzione |
+| Method | Path | Function |
 |---|---|---|
-| GET | `/api/labs` | elenco dei lab |
-| POST | `/api/labs` | crea un lab (`{"name":...}` oppure `{"yaml":...}`) |
-| GET/PUT | `/api/labs/{lab}` e `/api/labs/{lab}/yaml` | legge o modifica la definizione |
-| POST | `/api/labs/{lab}/deploy` e `/destroy` | avvia o ferma l'intero lab |
-| POST | `/api/labs/{lab}/nodes/{node}/start`, `stop`, `wipe` | singolo nodo |
-| WS | `/api/labs/{lab}/nodes/{node}/console?token=...` | consolle |
+| GET | `/api/labs` | list of labs |
+| POST | `/api/labs` | create a lab (`{"name":...}` or `{"yaml":...}`) |
+| GET/PUT | `/api/labs/{lab}` and `/api/labs/{lab}/yaml` | read or edit the definition |
+| POST | `/api/labs/{lab}/deploy` and `/destroy` | start or stop the whole lab |
+| POST | `/api/labs/{lab}/nodes/{node}/start`, `stop`, `wipe` | single node |
+| WS | `/api/labs/{lab}/nodes/{node}/console?token=...` | console |
 
-## Come funziona
+## How it works
 
-- **Rete**: ogni collegamento è un piccolo bridge Linux. Le VM vi si attaccano tramite interfacce tap, i container tramite coppie veth spostate nel loro namespace. I bridge inoltrano anche LLDP, LACP e STP, quindi si comportano come un cavo vero.
-- **VM**: `qemu-system-x86_64` con KVM, una consolle seriale su telnet (porte da 32769) e VNC (porte da 5910).
-- **Stato**: `/var/lib/netso/labs/<lab>/` contiene `lab.yml`, `state.json` e gli overlay dei dischi.
+- **Network**: every link is a small Linux bridge. VMs attach to it through tap interfaces, containers through veth pairs moved into their namespace. The bridges also forward LLDP, LACP, and STP, so they behave like a real cable.
+- **VMs**: `qemu-system-x86_64` with KVM, a serial console on telnet (ports from 32769) and VNC (ports from 5910).
+- **State**: `/var/lib/netso/labs/<lab>/` contains `lab.yml`, `state.json`, and the disk overlays.
 
-## Sicurezza
+## Security
 
-NetSO gira come root, perché deve creare interfacce di rete e usare KVM e Docker. Va quindi tenuto su una rete di laboratorio fidata e il token va lasciato attivo. Per accedere da remoto è meglio passare da una VPN o da un tunnel SSH (`ssh -L 8080:localhost:8080 server`).
+NetSO runs as root, because it has to create network interfaces and use KVM and Docker. So keep it on a trusted lab network and leave the token enabled. For remote access it is better to go through a VPN or an SSH tunnel (`ssh -L 8080:localhost:8080 server`).
 
-## Sviluppo
+## Development
 
 ```bash
 cd backend && python3 -m venv .venv && . .venv/bin/activate && pip install -e '.[dev]'
-pytest                                                # i test girano in dry-run, senza root
-NETSO_DRY_RUN=1 NETSO_HOME=/tmp/ln netso serve  # simula senza toccare l'host
-cd ../frontend && npm install && npm run dev          # UI su http://localhost:5173
+pytest                                                # tests run in dry-run, no root needed
+NETSO_DRY_RUN=1 NETSO_HOME=/tmp/ln netso serve  # simulate without touching the host
+cd ../frontend && npm install && npm run dev          # UI at http://localhost:5173
 ```
 
-In modalità `NETSO_DRY_RUN=1` i comandi verso l'host vengono solo registrati e non eseguiti: è utile per provare la UI su qualsiasi PC.
+In `NETSO_DRY_RUN=1` mode, commands to the host are only logged and not executed: handy for trying the UI on any PC.
 
-## Contribuire
+## Contributing
 
-NetSO è open source e accetta volentieri contributi: vedi [CONTRIBUTING.md](CONTRIBUTING.md). La regola principale è semplice — **niente immagini, binari o licenze dei vendor nel repository**, e nessun codice copiato da altri progetti.
+NetSO is open source and happily accepts contributions: see [CONTRIBUTING.md](CONTRIBUTING.md). The main rule is simple — **no vendor images, binaries, or licenses in the repository**, and no code copied from other projects.
 
-## Licenza
+## License
 
-NetSO è distribuito sotto licenza **Apache-2.0**: vedi i file [LICENSE](LICENSE) e [NOTICE](NOTICE).
+NetSO is distributed under the **Apache-2.0** license: see the [LICENSE](LICENSE) and [NOTICE](NOTICE) files.
 
-## Avvertenza / Disclaimer
+## Disclaimer
 
-**IT —** NetSO è un progetto indipendente e **non è affiliato né approvato** da Cisco, Juniper, Fortinet, Arista, Nokia, VyOS, GNS3, EVE-NG, PNETLab o altri vendor. Tutti i marchi appartengono ai rispettivi proprietari e sono citati solo per descrivere la compatibilità. **NetSO non include, non distribuisce e non collega nessuna immagine, firmware o licenza dei vendor**: ogni immagine va ottenuta dall'utente, che deve possederne una licenza valida. NetSO si limita a far girare le immagini che l'utente possiede già. Il software è fornito "così com'è", senza garanzie.
-
-**EN —** NetSO is an independent project and is **not affiliated with or endorsed by** Cisco, Juniper, Fortinet, Arista, Nokia, VyOS, GNS3, EVE-NG, PNETLab, or any other vendor. All trademarks belong to their respective owners and are referenced only to describe compatibility. **NetSO does not include, distribute, or link to any vendor image, firmware, or license**: each image must be obtained by the user, who must hold a valid license for it. NetSO merely runs images the user already owns. The software is provided "as is", without warranty.
+NetSO is an independent project and is **not affiliated with or endorsed by** Cisco, Juniper, Fortinet, Arista, Nokia, VyOS, GNS3, EVE-NG, PNETLab, or any other vendor. All trademarks belong to their respective owners and are referenced only to describe compatibility. **NetSO does not include, distribute, or link to any vendor image, firmware, or license**: each image must be obtained by the user, who must hold a valid license for it. NetSO merely runs images the user already owns. The software is provided "as is", without warranty.

@@ -1,7 +1,7 @@
 name: juniper-crpd
 title: Juniper cRPD
 kind: docker
-description: Juniper cRPD (container). Immagine e licenza da juniper.net, da caricare con 'docker load'. Da verificare.
+description: Juniper cRPD (container). Image and license from juniper.net, load with 'docker load'. To be verified.
 icon: router
 vendor: Juniper
 image: crpd:latest

@@ -127,7 +127,7 @@ class Template(BaseModel):
     save_enable: bool = False  # VMs: type "enable" first if the prompt ends with ">"
     ansible_os: str | None = None  # ansible_network_os for the generated inventory
     shell: list[str] | None = None  # containers: what the console runs (e.g. ["sr_cli"], ["Cli"]); default bash/sh
-    console_user: str | None = None  # SSH user for the "console nel terminale del PC" launcher (default root)
+    console_user: str | None = None  # SSH user for the "console in the PC terminal" launcher (default root)
     vendor: str | None = None
 
     @field_validator("name")

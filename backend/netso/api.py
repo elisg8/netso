@@ -140,7 +140,7 @@ def _disk(p) -> dict | None:
 
 @app.get("/api/status", dependencies=[api])
 def status():
-    """Live snapshot of how the server is actually doing (for the «Stato server» dialog)."""
+    """Live snapshot of how the server is actually doing (for the «Server status» dialog)."""
     from pathlib import Path as _P
     host = host_info()
     load = None
@@ -493,65 +493,65 @@ def _lab_context(lab_name: str, node_name: str | None) -> str | None:
     except Exception:
         state = None
     configs = topo.read_configs(lab_name, lab.config_set)
-    out = [f"=== Contesto del lab NetSO «{lab.name}» ==="]
+    out = [f"=== NetSO lab context «{lab.name}» ==="]
     if lab.description:
-        out.append(f"Obiettivo/descrizione: {lab.description}")
+        out.append(f"Objective/description: {lab.description}")
 
-    out.append("\nNodi (dispositivo · stato):")
+    out.append("\nNodes (device · state):")
     for n in lab.nodes:
         tpl = tpls.get(n.template)
         ns = state.nodes.get(n.name) if state else None
-        st = (ns.status if ns else None) or "fermo"
+        st = (ns.status if ns else None) or "stopped"
         ifaces = tpl.interface_names(n.nics or tpl.nics) if tpl else []
         extra = f" · mgmt {ns.mgmt_ip}" if ns and ns.mgmt_ip else ""
-        out.append(f"- {n.name}: {n.template}{f' ({tpl.kind})' if tpl else ''} · {st}{extra} · interfacce: {', '.join(ifaces) or 'n/d'}")
+        out.append(f"- {n.name}: {n.template}{f' ({tpl.kind})' if tpl else ''} · {st}{extra} · interfaces: {', '.join(ifaces) or 'n/a'}")
 
-    out.append("\nCollegamenti:")
+    out.append("\nLinks:")
     for ln in lab.links:
         out.append("- " + " <-> ".join(ln.endpoints))
 
     if configs:
-        out.append(f"\nConfigurazioni di avvio (set «{lab.config_set}»):")
+        out.append(f"\nStartup configs (set «{lab.config_set}»):")
         for name, txt in configs.items():
             if txt and txt.strip():
                 out.append(f"\n--- {name} ---\n{txt.strip()}")
     else:
-        out.append("\n(Nessuna config di avvio salvata: i nodi partono vuoti.)")
+        out.append("\n(No startup config saved: the nodes boot empty.)")
 
     if node_name and any(n.name == node_name for n in lab.nodes):
-        out.append(f"\nL'utente è bloccato soprattutto sul nodo «{node_name}».")
+        out.append(f"\nThe user is mainly stuck on node «{node_name}».")
     return "\n".join(out)
 
 
 _ASSISTANT_SYSTEM = (
-    "Sei l'assistente di NetSO e aiuti l'utente MENTRE svolge un lab di rete. "
-    "Se c'è il contesto del lab, usalo: conosci topologia, stato dei nodi e configurazioni. "
-    "Quando l'utente è bloccato o «qualcosa non funziona», ragiona come un istruttore: "
-    "1) individua la causa probabile guardando config e topologia; "
-    "2) indica i comandi di verifica (es. per FRRouting «show ...», ping, traceroute); "
-    "3) proponi la correzione precisa di configurazione. "
-    "Sii conciso e pratico; usa la sintassi del dispositivo giusto (FRRouting se non specificato)."
+    "You are the NetSO assistant and you help the user WHILE they work through a network lab. "
+    "If the lab context is present, use it: you know the topology, node state and configurations. "
+    "When the user is stuck or says «something isn't working», reason like an instructor: "
+    "1) find the likely cause by looking at the configs and topology; "
+    "2) point out the verification commands (e.g. for FRRouting «show ...», ping, traceroute); "
+    "3) propose the precise configuration fix. "
+    "Be concise and practical; use the syntax of the right device (FRRouting unless specified)."
 )
 _LIVE_PROTOCOL = (
-    "\n\nMODALITÀ LIVE ATTIVA: i nodi del lab sono ACCESI e sei TU a eseguire i comandi di sola lettura "
-    "e a vederne l'output reale. Questo ANNULLA il punto 2 qui sopra: NON dire all'utente «esegui show ...»; "
-    "i comandi li lanci tu. "
-    "COME: quando ti serve un dato dai nodi, rispondi con SOLO righe nel formato «RUN <nodo>: <comando>» "
-    "(una per riga, la parola RUN a inizio riga, poi il nome ESATTO del nodo preso dal contesto, due punti, "
-    "il comando) — per esempio una riga tipo «RUN <nodo>: show ip bgp summary» e una «RUN <nodo>: show running-config». "
-    "In quel turno scrivi SOLO quelle righe, niente prosa e niente blocchi di codice. Io eseguo i comandi sui nodi "
-    "reali e ti rimando l'output; poi, con i dati veri davanti, dai la verifica/diagnosi in prosa SENZA righe RUN. "
-    "Sola lettura (show/ping/traceroute), sintassi FRR o Cisco IOS secondo il nodo. "
-    "Per una verifica tipica parti da «show running-config» e «show ip bgp summary» sui nodi coinvolti."
+    "\n\nLIVE MODE ACTIVE: the lab nodes are POWERED ON and it is YOU who runs the read-only commands "
+    "and sees their real output. This OVERRIDES point 2 above: do NOT tell the user «run show ...»; "
+    "you are the one who runs the commands. "
+    "HOW: when you need data from the nodes, answer with ONLY lines in the format «RUN <node>: <command>» "
+    "(one per line, the word RUN at the start of the line, then the EXACT node name taken from the context, a colon, "
+    "the command) — for example a line like «RUN <node>: show ip bgp summary» and one «RUN <node>: show running-config». "
+    "In that turn write ONLY those lines, no prose and no code blocks. I run the commands on the real "
+    "nodes and send you the output back; then, with the real data in front of you, give the verification/diagnosis in prose WITHOUT RUN lines. "
+    "Read-only (show/ping/traceroute), FRR or Cisco IOS syntax depending on the node. "
+    "For a typical check start from «show running-config» and «show ip bgp summary» on the nodes involved."
 )
 _LIVE_ANSWER = (
-    "\n\nQUANDO RISPONDI IN PROSA (dopo aver ricevuto gli output): rispondi SOLO a ciò che l'utente ha chiesto, "
-    "in modo conciso. Mostra i dati raccolti e, se serve, un commento breve. "
-    "Se l'utente ha solo chiesto di VEDERE un dato (es. «mostrami le route»), mostralo e FERMATI. "
-    "VIETATO: suggerire altri comandi da far lanciare all'utente, scrivere blocchi «Esempio di comandi» o finte sessioni "
-    "tipo «R01# ping ...», aggiungere piani di verifica, «passi successivi», «conclusioni» o diagnosi che l'utente non ha chiesto. "
-    "Fai una diagnosi o proponi correzioni SOLO se l'utente ha segnalato un problema o te lo ha chiesto esplicitamente. "
-    "Niente riempitivi: se hai la risposta, dalla e basta."
+    "\n\nWHEN YOU ANSWER IN PROSE (after receiving the output): answer ONLY what the user asked, "
+    "concisely. Show the data you gathered and, if needed, a short comment. "
+    "If the user only asked to SEE some data (e.g. «show me the routes»), show it and STOP. "
+    "FORBIDDEN: suggesting more commands for the user to run, writing «Example commands» blocks or fake sessions "
+    "like «R01# ping ...», adding verification plans, «next steps», «conclusions» or diagnoses the user did not ask for. "
+    "Make a diagnosis or propose fixes ONLY if the user reported a problem or asked you explicitly. "
+    "No filler: if you have the answer, just give it."
 )
 # tolerate leading markdown/bullets/backticks the model may add before RUN
 _RUN_RE = re.compile(r"(?m)^[ \t>*`\-]*RUN\s+([A-Za-z0-9][A-Za-z0-9_.\-]*)\s*:\s*`?(.+?)`?\s*$")
@@ -559,7 +559,7 @@ _MAX_ROUNDS = 3
 _MAX_CMDS = 6
 # in live mode, if the model answers WITHOUT running and instead invents device output or tells the
 # user to run a command, force it to execute for real once (never trust fabricated output)
-_FAKE_STRONG = re.compile(r"(?mi)(esempio di (output|comand)|BGP neighbor is|Gateway of last resort|"
+_FAKE_STRONG = re.compile(r"(?mi)(example (output|command)|BGP neighbor is|Gateway of last resort|"
                           r"neighbor is .*remote AS|Established, up for|is directly connected)")
 _FAKE_SUGGEST = re.compile(r"(?mi)^\s*`?[A-Za-z0-9_.\-]+\s*[#>]\s*(show|ping|traceroute|sh\b)")
 
@@ -569,24 +569,24 @@ def _looks_fabricated(text: str) -> bool:
 
 
 _FORCE_RUN = (
-    "\n\n[Sistema] Non hai eseguito nulla e NON devi inventare l'output: i nodi sono reali e accesi, "
-    "non puoi sapere cosa rispondono finché non li interroghi. Rispondi ORA con SOLO righe «RUN <nodo>: <comando>» "
-    "(una per riga, il nome ESATTO del nodo preso dal contesto) per ottenere i dati veri; poi ti rimando l'output. "
-    "Niente prosa, niente blocchi «esempio di output», niente sessioni finte."
+    "\n\n[System] You ran nothing and you must NOT invent the output: the nodes are real and powered on, "
+    "you cannot know what they answer until you query them. Answer NOW with ONLY «RUN <node>: <command>» lines "
+    "(one per line, the EXACT node name taken from the context) to get the real data; then I send you the output back. "
+    "No prose, no «example output» blocks, no fake sessions."
 )
 # config changes: the model PROPOSES, the user confirms in the UI, then the backend applies on the console
 _CONFIG_PROTOCOL = (
-    "\n\nAPPLICARE CONFIGURAZIONE: fallo SOLO se l'utente chiede di sistemare/applicare/configurare qualcosa "
-    "(non quando spiega o chiede solo di vedere un dato). Tu NON applichi nulla da solo e NON devi scrivere "
-    "«ho applicato», «fatto» o fingere di averlo configurato: PROPONI le modifiche e sarà l'utente a confermare "
-    "con «Applica». Formato della proposta, un blocco per nodo:\n"
-    "CONF <nodo>:\n"
-    "<righe di configurazione nella sintassi del dispositivo, SENZA «configure terminal» e SENZA «end»>\n"
+    "\n\nAPPLYING CONFIGURATION: do it ONLY if the user asks to fix/apply/configure something "
+    "(not when they are explaining or only asking to see some data). You do NOT apply anything yourself and you must NOT write "
+    "«I applied it», «done» or pretend you configured it: PROPOSE the changes and the user will confirm "
+    "with «Apply». Proposal format, one block per node:\n"
+    "CONF <node>:\n"
+    "<configuration lines in the device's syntax, WITHOUT «configure terminal» and WITHOUT «end»>\n"
     "ENDCONF\n"
-    "Nel blocco metti SOLO righe di configurazione (niente «show», niente commenti, niente ```); "
-    "fuori dal blocco spiega in una frase cosa cambiano."
+    "In the block put ONLY configuration lines (no «show», no comments, no ```); "
+    "outside the block explain in one sentence what they change."
 )
-# CONF <nodo>: … ENDCONF  — tolerate leading markdown/bullets/backticks around the block
+# CONF <node>: … ENDCONF  — tolerate leading markdown/bullets/backticks around the block
 _CONF_RE = re.compile(r"(?ms)^[ \t>*`\-]*CONF[ \t]+([A-Za-z0-9][A-Za-z0-9_.\-]*)[ \t]*:[ \t]*\r?\n(.*?)^[ \t>*`\-]*ENDCONF[ \t]*$")
 
 
@@ -605,10 +605,10 @@ def _extract_proposals(text: str):
 @app.post("/api/agents/{aid}/ask", dependencies=[api])
 def ask_agent(aid: str, body: AskBody):
     ctx = _lab_context(body.lab, body.node) if body.lab else None
-    convo = "\n".join(f"{'Utente' if m.get('role') == 'user' else 'Assistente'}: {m.get('text', '')}"
+    convo = "\n".join(f"{'User' if m.get('role') == 'user' else 'Assistant'}: {m.get('text', '')}"
                       for m in (body.history or []) if m.get("text"))
-    parts = ([ctx] if ctx else []) + ([f"--- Conversazione finora ---\n{convo}" if convo else ""])
-    parts = [p for p in parts if p] + [f"--- Nuovo messaggio dell'utente ---\n{body.prompt}"]
+    parts = ([ctx] if ctx else []) + ([f"--- Conversation so far ---\n{convo}" if convo else ""])
+    parts = [p for p in parts if p] + [f"--- New message from the user ---\n{body.prompt}"]
     base = "\n\n".join(parts)
     live = body.live and bool(ctx)
     try:
@@ -636,9 +636,9 @@ def ask_agent(aid: str, body: AskBody):
                     out = f"ERROR: {exc}"
                 transcript.append({"node": node, "cmd": cmd, "output": out})
                 obs.append(f"$ {node}: {cmd}\n{out}")
-            prompt = (f"{prompt}\n\n[Le tue direttive]\n{reply}\n\n[Output dei comandi]\n" + "\n\n".join(obs)
-                      + "\n\nProsegui: altre righe RUN se ti serve altro, altrimenti la diagnosi finale.")
-        final = agents_mod.ask(aid, prompt + "\n\nOra rispondi all'utente in prosa, senza altre righe RUN.",
+            prompt = (f"{prompt}\n\n[Your directives]\n{reply}\n\n[Command output]\n" + "\n\n".join(obs)
+                      + "\n\nContinue: more RUN lines if you need anything else, otherwise the final diagnosis.")
+        final = agents_mod.ask(aid, prompt + "\n\nNow answer the user in prose, with no more RUN lines.",
                                system=_ASSISTANT_SYSTEM + _CONFIG_PROTOCOL + _LIVE_ANSWER)
         clean, proposals = _extract_proposals(final)
         return {"text": clean, "transcript": transcript, "proposals": proposals}
@@ -952,25 +952,25 @@ class GenLab(BaseModel):
     image: str | None = None      # scenario: which image/version of that router to use (from its «choices»)
 
 
-_MY_LABS_RE = re.compile(r"(?i)^\s*i\s*miei\s*lab\s*[·:/|\-–—]*\s*")
+_MY_LABS_RE = re.compile(r"(?i)^\s*(?:my\s*labs|i\s*miei\s*lab)\s*[·:/|\-–—]*\s*")
 
 
 def _clean_cat(cat: str | None) -> str:
-    """Strip the «I miei lab ·» prefix from a catalogue lab's category (e.g. «I miei lab · BGP» → «BGP»)."""
+    """Strip the «My labs ·» prefix from a catalogue lab's category (e.g. «My labs · BGP» → «BGP»)."""
     c = _MY_LABS_RE.sub("", (cat or "").strip()).strip()
-    return c or "Copie pronte"
+    return c or "Ready copies"
 
 
 @app.get("/api/scenarios", dependencies=[api])
 def list_scenarios():
-    """Ready lab topics by protocol, for the «Genera lab» dialog."""
+    """Ready lab topics by protocol, for the «Generate lab» dialog."""
     out = []
     for t in scenarios.TOPICS:
         d = {k: t[k] for k in ("id", "label", "cat", "desc", "level")}
         d["ios"] = t["id"] in scenarios.IOS_TOPICS   # can be built on a Cisco IOS router too
         d["host"] = t["id"] in scenarios.HOST_TOPICS  # router-agnostic (switch + hosts)
         out.append(d)
-    # custom catalogue labs (ready labs you cloned in): drop the verbose «I miei lab ·» prefix from the category
+    # custom catalogue labs (ready labs you cloned in): drop the verbose «My labs ·» prefix from the category
     for m in labcatalog.list_catalog():
         out.append({"id": f"cat:{m['id']}", "label": m.get("label", m["id"]),
                     "cat": _clean_cat(m.get("cat")), "desc": m.get("desc", ""),
@@ -989,7 +989,7 @@ def generate_lab(body: GenLab, request: Request):
     solution: dict[str, str] = {}
     try:
         if body.scenario and body.scenario.startswith("cat:"):
-            # a lab from the custom catalogue («I miei lab»): clone it under the new name
+            # a lab from the custom catalogue («My labs»): clone it under the new name
             clab, configs, instr = labcatalog.load_catalog(body.scenario[4:])
             lab = Lab(name=body.name, description=body.description or clab.description,
                       instructions=instr, generated=True)
@@ -1002,7 +1002,7 @@ def generate_lab(body: GenLab, request: Request):
             lab = Lab(name=body.name, description=body.description or spec["description"],
                       instructions=spec.get("instructions", ""), generated=True)
             configs = spec["configs"]           # base (IP addressing): the lab boots with this
-            solution = spec.get("solution", {})  # full working config, kept in the «soluzione» set
+            solution = spec.get("solution", {})  # full working config, kept in the «solution» set
             lab.nodes = [Node(**n) for n in spec["nodes"]]
             lab.links = [Link(**ln) for ln in spec["links"]]
             if body.image and body.router:       # chosen image/version on the generated router nodes
@@ -1025,7 +1025,7 @@ def generate_lab(body: GenLab, request: Request):
                 topo.write_config(lab.name, lab.config_set, node, text)
         for node, text in solution.items():
             if node in valid:
-                topo.write_config(lab.name, "soluzione", node, text)
+                topo.write_config(lab.name, "solution", node, text)
     except HTTPException:
         topo.delete_lab(body.name)
         raise
@@ -1392,7 +1392,7 @@ def deploy(name: str):
 
 @app.post("/api/labs/{name}/stop", dependencies=[api])
 def stop_lab(name: str):
-    """Stop all running nodes (keeps the networks); the lab becomes «fermo»."""
+    """Stop all running nodes (keeps the networks); the lab becomes «stopped»."""
     try:
         return engine.stop_lab(name)
     except Exception as exc:

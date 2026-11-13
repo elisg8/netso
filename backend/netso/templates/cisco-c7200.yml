@@ -1,7 +1,7 @@
 name: cisco-c7200
 title: Cisco IOS C7200 (Dynamips)
 kind: dynamips
-description: Cisco 7200 classico (Dynamips) con la tua immagine IOS c7200-*.image. Imposta idle-pc per non consumare CPU.
+description: Classic Cisco 7200 (Dynamips) with your c7200-*.image IOS image. Set idle-pc to avoid burning CPU.
 icon: router
 vendor: Cisco
 image: c7200

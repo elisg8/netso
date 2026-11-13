@@ -1,4 +1,4 @@
-"""A fixed catalogue of ready-made labs shown in «Genera lab» (category «I miei lab»).
+"""A fixed catalogue of ready-made labs shown in «Generate lab» (category «My labs»).
 
 Each entry is a saved lab under <home>/scenario_labs/<id>/ (lab.yml + configs/default/*.cfg
 + instructions.md + meta.json). Picking one in the generator clones it into a brand-new lab.
@@ -21,7 +21,7 @@ def catalog_dir() -> Path:
 
 def _read_text(p: Path) -> str:
     """Read a catalogue text file tolerating non-UTF-8 bytes (configs exported from EVE-NG/PNETLab
-    are often Windows-1252/Latin-1, e.g. byte 0xa3 = £), so a stray byte can't break «Genera lab»."""
+    are often Windows-1252/Latin-1, e.g. byte 0xa3 = £), so a stray byte can't break «Generate lab»."""
     data = p.read_bytes()
     try:
         return data.decode("utf-8")

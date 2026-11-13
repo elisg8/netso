@@ -1,7 +1,7 @@
 name: vxlan
-title: Collegamento VXLAN
+title: VXLAN link
 kind: vxlan
-description: Collegamento verso un lab su un altro server NetSO (tunnel VXLAN, stesso VNI sui due lati).
+description: Link to a lab on another NetSO server (VXLAN tunnel, same VNI on both sides).
 icon: cloud
 nics: 16
 console: none

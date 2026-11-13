@@ -519,7 +519,7 @@ class Engine:
             self.iol.wipe(name, node)
 
     def stop_lab(self, name: str) -> LabState:
-        """Stop every running node (leaves the networks in place); the lab becomes «fermo»."""
+        """Stop every running node (leaves the networks in place); the lab becomes "stopped"."""
         with _locks[name]:
             state = load_state(name)
             for node, ns in list(state.nodes.items()):
@@ -537,7 +537,7 @@ class Engine:
     # -- status
     @staticmethod
     def _lab_status(state: LabState) -> str:
-        """A lab is «avviato» only while something is actually running."""
+        """A lab is "running" only while something is actually running."""
         if state.status == "deploying":
             return "deploying"
         if any(n.status == "running" for n in state.nodes.values()):

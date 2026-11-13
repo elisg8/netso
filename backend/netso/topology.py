@@ -28,7 +28,7 @@ def load_templates() -> dict[str, Template]:
                 data.setdefault("name", f.stem)
                 tpl = Template(**data)
             except Exception as exc:  # pragma: no cover - surfaced in logs
-                print(f"[netso] template ignorato {f}: {exc}")
+                print(f"[netso] template ignored {f}: {exc}")
                 continue
             found[tpl.name] = tpl
     return dict(sorted(found.items()))

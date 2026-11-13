@@ -136,7 +136,7 @@ function VncConsole({ lab, node, visible, spice }) {
   const rfb = useRef(null)
   const [status, setStatus] = useState('connecting')
   const [attempt, setAttempt] = useState(0)
-  const [fit, setFit] = useState(true)   // true = adatta allo schermo; false = dimensione reale (1:1)
+  const [fit, setFit] = useState(true)   // true = fit to the screen; false = real size (1:1)
   const wrap = useRef(null)
   const ctl = useRef(null)
   const clip = useClipboardBridge(wrap, ctl, visible && status === 'on', 'type')
@@ -325,7 +325,7 @@ export function ConsoleWindows({ lab, items, kindOf, onClose }) {
     const fresh = ids.filter((id) => !seen.current.has(id))
     seen.current = new Set(ids)
     setActive((a) => (fresh.length ? fresh[fresh.length - 1] : ids.includes(a) ? a : (ids[ids.length - 1] ?? null)))
-    if (fresh.length) setWin((w) => (w.min ? { ...w, min: false } : w))  // una nuova consolle riapre la finestra ridotta
+    if (fresh.length) setWin((w) => (w.min ? { ...w, min: false } : w))  // a new console reopens the minimized window
   }, [items])
   const upd = (patch) => setWin((w) => ({ ...w, ...patch }))
   const grab = (e, mode) => {

@@ -1,7 +1,7 @@
 name: vyos
 title: VyOS
 kind: qemu
-description: Router VyOS (qcow2)
+description: VyOS router (qcow2)
 icon: router
 image: vyos
 cpus: 1

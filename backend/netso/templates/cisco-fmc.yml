@@ -1,7 +1,7 @@
 name: cisco-fmc
 title: Cisco Secure Firewall Management Center (FMCv)
 kind: qemu
-description: Cisco Firepower / Secure Firewall Management Center Virtual (FMCv), il gestore degli FTD. Immagine Cisco per KVM (.qcow2), NON la variante cloud Azure/AWS (quella si blocca in firstboot su waagent). Immagine non inclusa.
+description: Cisco Firepower / Secure Firewall Management Center Virtual (FMCv), the manager for FTDs. Cisco image for KVM (.qcow2), NOT the Azure/AWS cloud variant (that one hangs at firstboot on waagent). Image not included.
 icon: server
 image: cisco-fmc
 cpus: 4
@@ -12,11 +12,11 @@ disk_bus: virtio
 console: vnc
 iface_prefix: eth
 iface_start: 0
-# Valori come il template firepower6-FMC di EVE-NG/PNETLab: 4 vCPU, 8 GB, consolle VNC, NIC e1000,
-# -cpu host. FMCv gira su Linux: niente workaround async-PF (serve a FTDv, basato su FreeBSD).
-# Primo avvio molto lungo (30-60 min: costruisce il database); si vede sulla consolle VNC,
-# login admin/Admin123, poi gestione dalla web UI sull'interfaccia di management (eth0).
-# Una sola NIC mgmt (EVE ne dà 5 perché è un template generico, ma l'FMC usa solo eth0).
+# Values like the EVE-NG/PNETLab firepower6-FMC template: 4 vCPU, 8 GB, VNC console, e1000 NIC,
+# -cpu host. FMCv runs on Linux: no async-PF workaround (that is needed by FTDv, which is FreeBSD-based).
+# Very long first boot (30-60 min: it builds the database); visible on the VNC console,
+# login admin/Admin123, then management from the web UI on the management interface (eth0).
+# A single mgmt NIC (EVE gives 5 because it is a generic template, but the FMC uses only eth0).
 cpu_model: host
 config_method: none
 console_user: admin

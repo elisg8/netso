@@ -1,7 +1,7 @@
 name: docker
 title: Docker
 kind: docker
-description: Qualsiasi immagine Docker presente sul server (scegli l'immagine quando aggiungi il nodo).
+description: Any Docker image present on the server (pick the image when you add the node).
 icon: docker
 image: alpine:latest
 nics: 4

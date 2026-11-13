@@ -1,7 +1,7 @@
 name: cisco-c8000v
 title: Cisco Catalyst 8000V
 kind: qemu
-description: Cisco Catalyst 8000V. Immagine Cisco, non inclusa.
+description: Cisco Catalyst 8000V. Cisco image, not included.
 icon: router
 image: cisco-c8000v
 cpus: 2

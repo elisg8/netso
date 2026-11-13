@@ -1,7 +1,7 @@
 name: cisco-iol-vrnetlab
 title: Cisco IOL Router (vrnetlab)
 kind: docker
-description: Cisco IOL L3 in container vrnetlab (alternativa al nativo) — costruisci tu l'immagine con il tuo IOL (srl-labs/vrnetlab, cisco/iol). Da verificare.
+description: Cisco IOL L3 in a vrnetlab container (alternative to native) — build the image yourself with your IOL (srl-labs/vrnetlab, cisco/iol). To be verified.
 icon: router
 vendor: Cisco
 image: vrnetlab/cisco_iol:17.12.01

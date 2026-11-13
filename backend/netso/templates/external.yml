@@ -1,7 +1,7 @@
 name: external
-title: Rete esterna (bridge host)
+title: External network (host bridge)
 kind: external
-description: Collega il lab a un bridge esistente dell'host (es. br0 verso la rete reale)
+description: Connect the lab to an existing host bridge (e.g. br0 toward the real network)
 icon: cloud
 nics: 16
 console: none

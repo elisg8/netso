@@ -1,7 +1,7 @@
 name: cisco-iosv
 title: Cisco vIOS Router
 kind: qemu
-description: Cisco IOSv (router L3). Immagine da Cisco/CML, non inclusa.
+description: Cisco IOSv (L3 router). Image from Cisco/CML, not included.
 icon: router
 image: cisco-iosv
 cpus: 1

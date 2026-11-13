@@ -238,7 +238,7 @@ export function GenerateLabDialog({ folder, onClose, onError, onCreated }) {
   // images available for the chosen router (its default + the installed versions)
   const imgs = rtpl ? [...new Set([rtpl.image, ...rtpl.choices].filter(Boolean))] : []
   useEffect(() => { setImage('') }, [router]) // reset the image when the router changes
-  // custom catalogue labs («I miei lab») come with their own nodes: no router/image choice
+  // custom catalogue labs («My labs») come with their own nodes: no router/image choice
   const pickRouter = cur && !cur.custom && !cur.host
   // a Cisco IOS router can't build the FRR-only scenarios (MPLS, EVPN, IPv6, PBR, security…)
   const incompat = pickRouter && rdia === 'ios' && !cur.ios
@@ -258,8 +258,8 @@ export function GenerateLabDialog({ folder, onClose, onError, onCreated }) {
     (!catFilter || s.cat === catFilter) &&
     (!lvlFilter || s.custom || s.level === lvlFilter) &&
     (!q || lc(`${s.label} ${s.desc} ${s.cat}`).includes(lc(q))))
-  // tieni la selezione (e la descrizione qui sotto) coerente coi filtri: se lo scenario scelto
-  // non è più fra quelli mostrati, seleziona il primo visibile
+  // keep the selection (and the description below) consistent with the filters: if the chosen scenario
+  // is no longer among those shown, select the first visible one
   useEffect(() => {
     if (filtered.length && !filtered.some((s) => s.id === scenario)) setScenario(filtered[0].id)
   }, [q, catFilter, lvlFilter, scenarios]) // eslint-disable-line react-hooks/exhaustive-deps
