@@ -42,11 +42,11 @@ class DockerDriver:
         try:
             self.r.run(["docker", "pull", image])
         except HostError as exc:
-            how = ("costruiscila con vrnetlab (srl-labs/vrnetlab) usando i tuoi file" if image.startswith("vrnetlab/")
-                   else "caricala da Dispositivi → Docker → Carica .tar")
-            raise RuntimeError(f"L'immagine Docker '{image}' non c'è sul server e non si può scaricare: {how}. "
-                               "Se l'hai già con un altro nome:tag, indicalo in Modifica nodo → Immagine "
-                               "(l'elenco è in Dispositivi → Docker)") from exc
+            how = ("build it with vrnetlab (srl-labs/vrnetlab) using your own files" if image.startswith("vrnetlab/")
+                   else "load it from Devices → Docker → Load .tar")
+            raise RuntimeError(f"The Docker image '{image}' is not on the server and cannot be downloaded: {how}. "
+                               "If you already have it under another name:tag, set it in Edit node → Image "
+                               "(the list is in Devices → Docker)") from exc
 
     def start(self, lab: str, node: ResolvedNode, state: NodeState, config: str | None = None) -> int:
         """Start the container and return its PID (needed to plug veths)."""
@@ -89,7 +89,7 @@ class DockerDriver:
             self.r.run(["docker", "start", name])
         pid = int(self.r.run(["docker", "inspect", "-f", "{{.State.Pid}}", name], fake="4242") or 0)
         if pid <= 0:
-            raise RuntimeError(f"Il container {name} non è partito (controlla 'docker logs {name}')")
+            raise RuntimeError(f"Container {name} did not start (check 'docker logs {name}')")
         state.container = name
         state.mgmt_ip = self.mgmt_ip(name)
         state.pid = pid

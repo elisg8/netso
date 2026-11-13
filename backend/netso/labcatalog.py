@@ -52,7 +52,7 @@ def list_catalog() -> list[dict]:
 def load_catalog(cid: str) -> tuple[Lab, dict[str, str], str]:
     d = catalog_dir() / cid
     if not (d / "lab.yml").exists():
-        raise FileNotFoundError(f"Lab di catalogo '{cid}' inesistente")
+        raise FileNotFoundError(f"Catalog lab '{cid}' does not exist")
     lab = parse_lab_yaml(_read_text(d / "lab.yml"))
     base = d / "configs" / "default"
     cfgs = {f.stem: _read_text(f) for f in sorted(base.glob("*.cfg"))} if base.is_dir() else {}

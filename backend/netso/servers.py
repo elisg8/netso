@@ -32,13 +32,13 @@ def _save(items: list[dict]) -> None:
 def add(name: str, url: str) -> dict:
     name, url = name.strip(), url.strip().rstrip("/")
     if not re.fullmatch(r"[\w .-]{1,40}", name):
-        raise ServerError("Nome non valido")
+        raise ServerError("Invalid name")
     u = urlparse(url)
     if u.scheme not in ("http", "https") or not u.hostname:
-        raise ServerError("Indirizzo non valido (es. http://192.168.1.20:8080)")
+        raise ServerError("Invalid address (e.g. http://192.168.1.20:8080)")
     items = list_servers()
     if any(s["name"] == name for s in items):
-        raise ServerError(f"Esiste già un server '{name}'")
+        raise ServerError(f"A server '{name}' already exists")
     item = {"name": name, "url": url, "host": u.hostname}
     _save(items + [item])
     return item
@@ -51,7 +51,7 @@ def remove(name: str) -> None:
 def ping(name: str) -> dict:
     s = next((x for x in list_servers() if x["name"] == name), None)
     if not s:
-        raise ServerError(f"Server '{name}' sconosciuto")
+        raise ServerError(f"Unknown server '{name}'")
     try:
         with urllib.request.urlopen(f"{s['url']}/api/auth/hint", timeout=3) as r:
             data = json.loads(r.read())

@@ -83,7 +83,7 @@ def _names(prefix: str, count: int, taken: set[str]) -> list[str]:
             taken.add(n)
         k += 1
     if not all(NAME_RE.match(n) for n in out):
-        raise GenerateError(f"Prefisso '{prefix}' non valido")
+        raise GenerateError(f"Invalid prefix '{prefix}'")
     return out
 
 
@@ -98,7 +98,7 @@ class _Builder:
 
     def add(self, prefix: str, tpl: str, count: int, positions) -> list[str]:
         if tpl not in self.templates:
-            raise GenerateError(f"Dispositivo '{tpl}' inesistente")
+            raise GenerateError(f"Device '{tpl}' does not exist")
         names = _names(prefix, count, self.taken)
         for n, (x, y) in zip(names, positions):
             self.nodes.append({"name": n, "template": tpl, "x": round(x), "y": round(y)})
@@ -186,10 +186,10 @@ def generate(lab: Lab, templates: dict[str, Template], pattern: str, p: dict) ->
         for a, c in zip(nodes, nodes[1:]):
             b.link(a, c)
     else:
-        raise GenerateError(f"Schema '{pattern}' sconosciuto (clos, ring, mesh, star, chain)")
+        raise GenerateError(f"Unknown pattern '{pattern}' (clos, ring, mesh, star, chain)")
     shared = {"bridge", "external", "nat"}
     for ln in b.links:
         a, c = (e.split(":", 1)[0] for e in ln["endpoints"])
         if b._tpl(a).kind in shared and b._tpl(c).kind in shared:
-            raise GenerateError("Due switch/reti non si possono collegare direttamente: scegli router o host")
+            raise GenerateError("Two switches/networks cannot be connected directly: choose a router or host")
     return b.result()

@@ -101,10 +101,10 @@ class Source:
             self.root = PurePosixPath(path)
         else:
             if not self.spec.startswith("/"):
-                raise PnetError("Indica un percorso assoluto (es. /opt/unetlab/addons) oppure utente@host:/percorso")
+                raise PnetError("Provide an absolute path (e.g. /opt/unetlab/addons) or user@host:/path")
             self.root = Path(self.spec).resolve()
             if not self.root.is_dir() and not self.r.dry_run:
-                raise PnetError(f"Cartella {self.root} inesistente sul server NetSO")
+                raise PnetError(f"Folder {self.root} does not exist on the NetSO server")
 
     def _ssh(self, cmd: str) -> str:
         if self.r.dry_run:
@@ -112,8 +112,8 @@ class Source:
             return ""
         p = subprocess.run(["ssh", *SSH_OPTS, self.target, cmd], capture_output=True, text=True, timeout=120)
         if p.returncode == 255:
-            raise PnetError(f"SSH verso {self.target} non riuscito: {p.stderr.strip()[:300]}. "
-                            "Serve l'accesso con chiave: sul server NetSO esegui `sudo ssh-keygen` e "
+            raise PnetError(f"SSH to {self.target} failed: {p.stderr.strip()[:300]}. "
+                            "Key-based access is required: on the NetSO server run `sudo ssh-keygen` and "
                             f"`sudo ssh-copy-id {self.target}`")
         return p.stdout
 
@@ -167,7 +167,7 @@ class Source:
                         m = re.match(r"\s*[\d,]+\s+\d+%\s+(\S+/s)?", buf)
                         if m:
                             n = part.stat().st_size if part.exists() else 0
-                            retry = f" · tentativo {attempt}/{RSYNC_TRIES}" if attempt > 1 else ""
+                            retry = f" · attempt {attempt}/{RSYNC_TRIES}" if attempt > 1 else ""
                             job.update((done + n) / total, f"{dest.parent.name}/{dest.name} · {n >> 20} MB · {m.group(1) or ''}{retry}")
                         elif buf.strip() and not buf.startswith("**"):  # skip OpenSSH's post-quantum banner
                             tail = (tail + [buf.strip()])[-4:]
@@ -178,10 +178,10 @@ class Source:
                     part.rename(dest)
                     return done + dest.stat().st_size
                 if attempt < RSYNC_TRIES:
-                    job.update(None, f"{dest.parent.name}/{dest.name} · connessione persa, riprovo tra 15 s ({' '.join(tail)[:120]})")
+                    job.update(None, f"{dest.parent.name}/{dest.name} · connection lost, retrying in 15 s ({' '.join(tail)[:120]})")
                     time.sleep(15)
-            raise PnetError(f"rsync di {rel} non riuscito dopo {RSYNC_TRIES} tentativi: {' '.join(tail)[:300]}. "
-                            "La parte già copiata resta: rilancia l'import per continuare da lì")
+            raise PnetError(f"rsync of {rel} failed after {RSYNC_TRIES} attempts: {' '.join(tail)[:300]}. "
+                            "The part already copied is kept: re-run the import to continue from there")
         src = self.root / rel
         size = src.stat().st_size
         if move:
@@ -207,7 +207,7 @@ class Source:
 def _folder_name(name: str) -> str:
     n = re.sub(r"[^A-Za-z0-9._+-]+", "-", name).strip("-.")[:100]
     if not IMG_RE.match(n or ""):
-        raise PnetError(f"Nome '{name}' non utilizzabile come cartella")
+        raise PnetError(f"Name '{name}' cannot be used as a folder")
     return n
 
 
@@ -289,23 +289,23 @@ def scan(spec: str, r: Runner) -> dict:
         me = socket.gethostname()
         if me in hosts:
             iourc = src.read(f"{base}/iol/bin/iourc".lstrip("/"))
-            notes.append(f"IOL: copio anche la licenza iourc di PNETLab (ha la riga per questo server, '{me}').")
+            notes.append(f"IOL: also copying PNETLab's iourc license (it has the line for this server, '{me}').")
         else:
-            notes.append(f"IOL: la licenza iourc di PNETLab {'è per ' + ', '.join(repr(h) for h in hosts) if hosts else 'non è stata trovata'}: "
-                         f"vale solo per quel nome host, non per questo server ('{me}'). Carica la tua licenza per '{me}': "
-                         "Dispositivi → Immagini → Licenza IOL.")
+            notes.append(f"IOL: PNETLab's iourc license {'is for ' + ', '.join(repr(h) for h in hosts) if hosts else 'was not found'}: "
+                         f"it is valid only for that host name, not for this server ('{me}'). Upload your license for '{me}': "
+                         "Devices → Images → IOL License.")
         if iol_lib:
-            notes.append(f"IOL: copio anche le librerie di {base}/iol/lib ({', '.join(r for r, _ in iol_lib)}) "
-                         "e le uso all'avvio dei nodi IOL.")
+            notes.append(f"IOL: also copying the libraries from {base}/iol/lib ({', '.join(r for r, _ in iol_lib)}) "
+                         "and using them when starting IOL nodes.")
     for it in items:
         if it["template"]:
-            it["action"] = f"usa {it['template']}"
+            it["action"] = f"uses {it['template']}"
         elif it["kind"] in ("dynamips", "iol"):
-            it["action"] = "solo immagine (piattaforma senza dispositivo NetSO)"
+            it["action"] = "image only (platform without a NetSO device)"
         else:
-            it["action"] = f"nuovo dispositivo '{it['prefix']}'"
+            it["action"] = f"new device '{it['prefix']}'"
     if not items and not notes:
-        raise PnetError(f"Nessuna immagine trovata in {spec}: indica /opt/unetlab/addons (o la cartella qemu)")
+        raise PnetError(f"No image found in {spec}: provide /opt/unetlab/addons (or the qemu folder)")
     return {"items": items, "notes": notes, "remote": src.remote, "iol_lib": iol_lib, "iourc": iourc}
 
 
@@ -393,16 +393,16 @@ def run_import(r: Runner, job: Job, spec: str, pick: list[str] | None, move: boo
     selected = [i for i in found["items"] if pick is None or i["src"] in pick or i["present"]]
     chosen = [i for i in selected if not i["present"]]
     if not selected:
-        return "Niente da importare (nessuna immagine selezionata)"
+        return "Nothing to import (no image selected)"
     if src.remote and not r.dry_run and not shutil.which("rsync"):
-        raise ImageError("Serve 'rsync' sul server NetSO (sudo apt install rsync)")
+        raise ImageError("'rsync' is required on the NetSO server (sudo apt install rsync)")
     total = sum(i["size"] for i in chosen) or 1
     if not (move and not src.remote):  # a full disk makes Proxmox stop/pause the VM: check first
         settings.images.mkdir(parents=True, exist_ok=True)
         free = shutil.disk_usage(settings.images).free
         if total + (2 << 30) > free:
-            raise PnetError(f"Spazio insufficiente in {settings.images}: servono {total / 2**30:.1f} GB (+2 GB di margine), "
-                            f"liberi {free / 2**30:.1f} GB. Scegli meno immagini o ingrandisci il disco")
+            raise PnetError(f"Not enough space in {settings.images}: {total / 2**30:.1f} GB needed (+2 GB margin), "
+                            f"{free / 2**30:.1f} GB free. Choose fewer images or enlarge the disk")
     done = 0
     for i in chosen:
         dest = settings.images / i["folder"]
@@ -456,12 +456,12 @@ def run_import(r: Runner, job: Job, spec: str, pick: list[str] | None, move: boo
         catalog.save_template(t)
         created.append(t.name)
     if not chosen and not updated and not created and not libs:
-        return "Niente da importare: immagini e dispositivi già presenti"
-    msg = f"{len(chosen)} immagini {'spostate' if move and not src.remote else 'copiate'}"
+        return "Nothing to import: images and devices already present"
+    msg = f"{len(chosen)} images {'moved' if move and not src.remote else 'copied'}"
     if updated:
-        msg += f"; dispositivi collegati: {', '.join(updated)}"
+        msg += f"; devices linked: {', '.join(updated)}"
     if created:
-        msg += f"; nuovi dispositivi: {', '.join(created)}"
+        msg += f"; new devices: {', '.join(created)}"
     if libs:
-        msg += f"; librerie IOL: {', '.join(libs)}"
+        msg += f"; IOL libraries: {', '.join(libs)}"
     return msg

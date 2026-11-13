@@ -46,9 +46,9 @@ def _slug(text: str) -> str:
 def check_filter(expr: str | None) -> str:
     expr = (expr or "").strip()
     if len(expr) > MAX_FILTER or any(c in expr for c in "\n\r\0"):
-        raise CaptureError("Filtro non valido")
+        raise CaptureError("Invalid filter")
     if expr.startswith("-"):
-        raise CaptureError("Il filtro non può iniziare con '-'")
+        raise CaptureError("The filter cannot start with '-'")
     return expr
 
 
@@ -263,7 +263,7 @@ class CaptureManager:
                     cap.proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                                 text=True, bufsize=1)
                 except OSError as exc:
-                    raise CaptureError(f"Impossibile avviare tcpdump: {exc}") from exc
+                    raise CaptureError(f"Could not start tcpdump: {exc}") from exc
                 threading.Thread(target=_read_output, args=(cap,), daemon=True).start()
             self._caps[cid] = cap
             return cap
@@ -301,7 +301,7 @@ class CaptureManager:
     def file(self, lab: str, cid: str) -> Path:
         """pcap written by tcpdump, or pcapng recorded by the in-browser Wireshark."""
         if not re.fullmatch(r"[A-Za-z0-9_.-]+", cid):
-            raise CaptureError("Cattura non valida")
+            raise CaptureError("Invalid capture")
         f = captures_dir(lab) / f"{cid}.pcap"
         ng = f.with_suffix(".pcapng")
         return ng if not f.exists() and ng.exists() else f

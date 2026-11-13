@@ -26,7 +26,7 @@ class DockerImageError(ValueError):
 def check_ref(ref: str) -> str:
     ref = (ref or "").strip()
     if not REF_RE.match(ref):
-        raise DockerImageError(f"Nome immagine Docker non valido: '{ref}' (es. quay.io/frrouting/frr:10.2.1)")
+        raise DockerImageError(f"Invalid Docker image name: '{ref}' (e.g. quay.io/frrouting/frr:10.2.1)")
     return ref
 
 
@@ -83,7 +83,7 @@ def pull(r: Runner, job: Job, ref: str) -> str:
     ref = check_ref(ref)
     if r.dry_run:
         r.log.append(f"docker pull {ref}")
-        return f"Scaricata {ref}"
+        return f"Pulled {ref}"
     proc = subprocess.Popen(["docker", "pull", ref], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     layers: dict[str, str] = {}
     tail = []
@@ -94,13 +94,13 @@ def pull(r: Runner, job: Job, ref: str) -> str:
         if m:
             layers[m.group(1)] = m.group(2)
             done = sum(1 for s in layers.values() if s in ("Pull complete", "Already exists"))
-            job.update(done / len(layers) if layers else None, f"{done}/{len(layers)} livelli · {m.group(2)}")
+            job.update(done / len(layers) if layers else None, f"{done}/{len(layers)} layers · {m.group(2)}")
     if proc.wait() != 0:
         msg = " ".join(tail)
         if "denied" in msg or "not found" in msg or "unauthorized" in msg:
-            msg += " — immagine inesistente o privata (per registry privati: `sudo docker login <registry>` sul server)"
-        raise DockerImageError(f"docker pull {ref} non riuscito: {msg[:400]}")
-    return f"Scaricata {ref}"
+            msg += " — image does not exist or is private (for private registries: `sudo docker login <registry>` on the server)"
+        raise DockerImageError(f"docker pull {ref} failed: {msg[:400]}")
+    return f"Pulled {ref}"
 
 
 # ------------------------------------------------------------------ load a tarball
@@ -119,14 +119,14 @@ def load(r: Runner, job: Job, path: Path, tag: str | None) -> str:
         loaded = re.findall(r"Loaded image(?: ID)?: (\S+)", out)
         if tag and loaded and loaded[0] != tag:
             r.run(["docker", "tag", loaded[0], tag])
-        return f"Caricata {tag or ', '.join(loaded) or path.name}"
+        return f"Loaded {tag or ', '.join(loaded) or path.name}"
     except Exception as exc:
         if not tag:
-            raise DockerImageError(f"docker load non riuscito ({str(exc)[-200:]}). Se è un tar di filesystem (es. cEOS) "
-                                   "indica il nome:tag da dare all'immagine e riprova") from exc
+            raise DockerImageError(f"docker load failed ({str(exc)[-200:]}). If it is a filesystem tar (e.g. cEOS) "
+                                   "give the name:tag to assign to the image and try again") from exc
         job.update(None, f"docker import {path.name} {tag}…")
         r.run(["docker", "import", str(path), tag])
-        return f"Importata {tag} (docker import)"
+        return f"Imported {tag} (docker import)"
     finally:
         if not r.dry_run:
             path.unlink(missing_ok=True)
@@ -137,5 +137,5 @@ def remove(r: Runner, ref: str, force: bool = False) -> None:
     if not force:
         users = [u for x in describe(r)["images"] if x["ref"] == ref for u in x["used_by"] if u.startswith("lab ")]
         if users:
-            raise DockerImageError(f"Usata da {', '.join(users)}")
+            raise DockerImageError(f"Used by {', '.join(users)}")
     r.run(["docker", "rmi", *(["-f"] if force else []), ref])

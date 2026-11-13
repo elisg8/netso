@@ -370,7 +370,7 @@ function ImagesTab({ images, templates, onUpload, onReload, onError, admin }) {
   const remove = async (img) => {
     if (!confirm(t('catalog.confirmDeleteImage', { name: img.name, size: fmtSize(img.size) }))) return
     try { await api(`/images/${encodeURIComponent(img.name)}`, { method: 'DELETE' }) } catch (e) {
-      if (!String(e.message).startsWith('Usata da') || !confirm(`${e.message}\n\n${t('catalog.deleteAnywayNodes')}`)) return onError(e)
+      if (!String(e.message).startsWith('Used by') || !confirm(`${e.message}\n\n${t('catalog.deleteAnywayNodes')}`)) return onError(e)
       try { await api(`/images/${encodeURIComponent(img.name)}?force=true`, { method: 'DELETE' }) } catch (e2) { return onError(e2) }
     }
     onReload()
@@ -593,7 +593,7 @@ function DockerTab({ onUpload, onJobs, running, onError, admin }) {
   const remove = async (img) => {
     if (!confirm(t('catalog.confirmDeleteDocker', { ref: img.ref, size: img.size }))) return
     try { await api('/images/docker/remove', { method: 'POST', body: { ref: img.ref } }) } catch (e) {
-      if (!String(e.message).startsWith('Usata da') || !confirm(`${e.message}\n\n${t('catalog.deleteAnyway')}`)) return onError(e)
+      if (!String(e.message).startsWith('Used by') || !confirm(`${e.message}\n\n${t('catalog.deleteAnyway')}`)) return onError(e)
       try { await api('/images/docker/remove', { method: 'POST', body: { ref: img.ref, force: true } }) } catch (e2) { return onError(e2) }
     }
     load()

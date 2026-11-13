@@ -94,7 +94,7 @@ class _Scn:
 
     def __init__(self, templates: dict[str, Template], router: str = ROUTER):
         if router not in templates:
-            raise GenerateError(f"Il router scelto '{router}' non esiste")
+            raise GenerateError(f"The selected router '{router}' does not exist")
         self.router = router
         self.b = _Builder(Lab(name="gen"), templates)
         self.links: list[dict] = []  # {a, ia, b, ib}
@@ -1392,7 +1392,7 @@ def _finish(hint: str, desc: str, res: dict, base: dict, solution: dict, instr: 
 def build(topic: str, templates: dict[str, Template], seed: int | None = None,
           count: int | None = None, router: str | None = None) -> dict:
     if topic not in TOPIC_IDS:
-        raise GenerateError(f"Argomento '{topic}' sconosciuto")
+        raise GenerateError(f"Unknown topic '{topic}'")
     rng = random.Random(seed)
     meta = next(t for t in TOPICS if t["id"] == topic)
 
@@ -1402,18 +1402,18 @@ def build(topic: str, templates: dict[str, Template], seed: int | None = None,
     rlabel = (templates[router_tpl].title or router_tpl) if router_tpl in templates else router_tpl
     if topic not in HOST_TOPICS:
         if dia is None:
-            raise GenerateError("Nessun router adatto installato: serve FRR o un router Cisco IOS "
-                                "(IOL, c7200/c3725, vIOS/IOSv, CSR).")
+            raise GenerateError("No suitable router installed: FRR or a Cisco IOS router "
+                                "(IOL, c7200/c3725, vIOS/IOSv, CSR) is required.")
         if dia != "frr" and topic not in IOS_TOPICS:
             raise GenerateError(
-                f"Lo scenario «{meta['label']}» per ora si genera solo con FRR "
-                "(funzione non disponibile in modo affidabile su Cisco IOL/IOSv). "
-                "Scegli FRR come router per questo argomento.")
+                f"The «{meta['label']}» scenario can currently only be generated with FRR "
+                "(the feature is not reliably available on Cisco IOL/IOSv). "
+                "Choose FRR as the router for this topic.")
 
     # ---- VLAN: switch + hosts (configured by hand on the switch)
     if topic == "vlan":
         if HOST not in templates or SWITCH not in templates:
-            raise GenerateError("Mancano i dispositivi 'vpc' e/o 'bridge' per lo scenario VLAN")
+            raise GenerateError("The 'vpc' and/or 'bridge' devices are missing for the VLAN scenario")
         n = _clamp(count, rng.randint(3, 6), 2, 20)
         b = _Builder(Lab(name="gen"), templates)
         sw = b.add("sw", SWITCH, 1, [(420, 180)])[0]
@@ -1462,7 +1462,7 @@ def build(topic: str, templates: dict[str, Template], seed: int | None = None,
     # ---- VRRP: a LAN (bridge) with two gateway routers sharing a virtual IP, plus hosts
     if topic == "vrrp":
         if HOST not in templates or SWITCH not in templates:
-            raise GenerateError("Mancano i dispositivi 'vpc' e/o 'bridge' per lo scenario VRRP")
+            raise GenerateError("The 'vpc' and/or 'bridge' devices are missing for the VRRP scenario")
         nhosts = _clamp(count, 3, 1, 10)
         b = _Builder(Lab(name="gen"), templates)
         sw = b.add("sw", SWITCH, 1, [(420, 120)])[0]
@@ -1548,7 +1548,7 @@ def build(topic: str, templates: dict[str, Template], seed: int | None = None,
     # ---- Hacking: MITM / ARP spoofing on a shared LAN (topology + guide, host-based)
     if topic == "mitm-arp":
         if HOST not in templates or SWITCH not in templates:
-            raise GenerateError("Mancano i dispositivi 'vpc' e/o 'bridge' per questo lab")
+            raise GenerateError("The 'vpc' and/or 'bridge' devices are missing for this lab")
         nvict = _clamp(count, 2, 2, 8)
         res, atk, _gw, vics = _hosts_lab(templates, nvict, attacker_prefix="kali")
         desc = f"MITM/ARP spoofing: 1 attaccante ({atk}) e {nvict} vittime sulla LAN 192.168.1.0/24."
@@ -1570,7 +1570,7 @@ def build(topic: str, templates: dict[str, Template], seed: int | None = None,
     # ---- Hacking: recon / scanning of a small server network
     if topic == "recon-scan":
         if HOST not in templates or SWITCH not in templates:
-            raise GenerateError("Mancano i dispositivi 'vpc' e/o 'bridge' per questo lab")
+            raise GenerateError("The 'vpc' and/or 'bridge' devices are missing for this lab")
         nsrv = _clamp(count, 3, 1, 8)
         res, atk, gw, srvs = _hosts_lab(templates, nsrv, attacker_prefix="kali", gateway=True)
         desc = f"Ricognizione: 1 attaccante ({atk}), un gateway e {nsrv} server sulla LAN 192.168.1.0/24."

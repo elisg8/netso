@@ -48,8 +48,8 @@ def iol_problem(d: Path) -> str:
     """Why an iol-* folder has no usable binary."""
     files = sorted(f.name for f in d.iterdir()) if d.is_dir() else []
     if any(n.endswith(".part") for n in files):
-        return f"{d.name}: copia non finita (.part), rilancia l'import da PNETLab"
-    return f"{d.name}: nessun file IOL ({', '.join(files[:4]) or 'cartella vuota'})"
+        return f"{d.name}: unfinished copy (.part), re-run the import from PNETLab"
+    return f"{d.name}: no IOL file ({', '.join(files[:4]) or 'empty folder'})"
 
 
 def iol_binary(image: str, l2: bool) -> Path:
@@ -68,8 +68,8 @@ def iol_binary(image: str, l2: bool) -> Path:
     match = [f for f in found if is_l2(f) == l2]
     if match or found:
         return (match or found)[-1]
-    raise FileNotFoundError(f"Nessuna immagine IOL (.bin) in {settings.images}: importala da PNETLab "
-                            "(Dispositivi → Immagini → PNETLab) o caricala in una cartella iol-<nome>")
+    raise FileNotFoundError(f"No IOL image (.bin) in {settings.images}: import it from PNETLab "
+                            "(Devices → Images → PNETLab) or upload it into an iol-<name> folder")
 
 
 def bay_unit(i: int) -> tuple[int, int]:
@@ -125,7 +125,7 @@ class IolDriver:
         try:
             state.pid = int(out.strip().splitlines()[-1])
         except (ValueError, IndexError):
-            raise RuntimeError("IOL non è partito (vedi iolwrap.log nella cartella del nodo)")
+            raise RuntimeError("IOL did not start (see iolwrap.log in the node folder)")
         if not self.r.dry_run:
             time.sleep(1.5)  # a missing library or a bad license makes IOL quit at once
             try:
@@ -145,12 +145,12 @@ class IolDriver:
         hint = ""
         low = text.lower()
         if "license" in low or "iourc" in low:
-            hint = (f" — licenza IOL non valida o mancante: carica il tuo iourc per l'host '{os.uname().nodename}' "
-                    "(Dispositivi → Immagini → Licenza IOL)")
+            hint = (f" — invalid or missing IOL license: upload your iourc for host '{os.uname().nodename}' "
+                    "(Devices → Images → IOL License)")
         elif "error while loading shared libraries" in low or "no such file" in low:
-            hint = (" — mancano librerie: rilancia l'import da PNETLab (copia addons/iol/lib) "
-                    "o install.sh (librerie i386)")
-        return f"IOL si è chiuso subito: {tail or 'nessun messaggio'}{hint}"
+            hint = (" — missing libraries: re-run the import from PNETLab (copies addons/iol/lib) "
+                    "or install.sh (i386 libraries)")
+        return f"IOL exited immediately: {tail or 'no message'}{hint}"
 
     def wipe(self, lab: str, node: str) -> None:
         d = self.node_dir(lab, node)

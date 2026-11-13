@@ -25,7 +25,7 @@ def ios_image(image: str) -> Path:
         files = sorted(f for f in p.iterdir() if f.suffix.lower() in IOS_SUFFIXES)
         if files:
             return files[0]
-    raise FileNotFoundError(f"Immagine IOS '{image}' non trovata in {settings.images} (file .image/.bin)")
+    raise FileNotFoundError(f"IOS image '{image}' not found in {settings.images} (.image/.bin file)")
 
 
 class DynamipsDriver:
@@ -72,7 +72,7 @@ class DynamipsDriver:
         try:
             state.pid = int(out.strip().splitlines()[-1])
         except (ValueError, IndexError):
-            raise RuntimeError("Dynamips non è partito (controlla che il pacchetto 'dynamips' sia installato)")
+            raise RuntimeError("Dynamips did not start (check that the 'dynamips' package is installed)")
 
     def wipe(self, lab: str, node: str) -> None:
         d = self.node_dir(lab, node)

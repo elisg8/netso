@@ -64,9 +64,9 @@ def users() -> dict:
 
 def set_password(username: str, password: str, role: str | None = None) -> None:
     if not _USER_RE.match(username or ""):
-        raise AuthError("Nome utente non valido")
+        raise AuthError("Invalid username")
     if len(password) < 4:
-        raise AuthError("La password deve avere almeno 4 caratteri")
+        raise AuthError("The password must be at least 4 characters long")
     data = users()
     with _lock:
         old = data.get(username, {})
@@ -85,12 +85,12 @@ def role_of(username: str | None) -> str:
 def set_role(username: str, role: str) -> None:
     from .access import ROLES
     if role not in ROLES:
-        raise AuthError(f"Ruolo '{role}' sconosciuto")
+        raise AuthError(f"Unknown role '{role}'")
     data = users()
     if username not in data:
-        raise AuthError(f"Utente '{username}' inesistente")
+        raise AuthError(f"User '{username}' does not exist")
     if data[username].get("role") == "admin" and role != "admin" and sum(1 for u in data.values() if u.get("role") == "admin") == 1:
-        raise AuthError("Deve restare almeno un amministratore")
+        raise AuthError("At least one administrator must remain")
     with _lock:
         data[username]["role"] = role
         _write("users.json", data)
@@ -99,11 +99,11 @@ def set_role(username: str, role: str) -> None:
 def delete_user(username: str) -> None:
     data = users()
     if username not in data:
-        raise AuthError(f"Utente '{username}' inesistente")
+        raise AuthError(f"User '{username}' does not exist")
     if len(data) == 1:
-        raise AuthError("Non puoi eliminare l'ultimo utente")
+        raise AuthError("You cannot delete the last user")
     if data[username].get("role") == "admin" and sum(1 for u in data.values() if u.get("role") == "admin") == 1:
-        raise AuthError("Non puoi eliminare l'ultimo amministratore")
+        raise AuthError("You cannot delete the last administrator")
     with _lock:
         data.pop(username)
         _write("users.json", data)
@@ -128,7 +128,7 @@ def _live_sessions() -> dict:
 
 def login(username: str, password: str) -> str:
     if not check_password(username, password):
-        raise AuthError("Utente o password errati")
+        raise AuthError("Wrong username or password")
     token = secrets.token_urlsafe(32)
     with _lock:
         sessions = _live_sessions()

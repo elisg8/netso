@@ -35,9 +35,9 @@ class ImageError(ValueError):
     pass
 
 
-def check_name(name: str, what: str = "Nome immagine") -> str:
+def check_name(name: str, what: str = "Image name") -> str:
     if name != ISO_DIR and not IMG_RE.match(name or ""):
-        raise ImageError(f"{what} non valido: lettere, numeri, . _ + - (max 100)")
+        raise ImageError(f"{what} invalid: letters, numbers, . _ + - (max 100)")
     return name
 
 
@@ -144,7 +144,7 @@ def finalize(r: Runner, path: Path, job: Job | None = None) -> list[str]:
     suf = path.suffix.lower()
     if suf == ".ova":
         if job:
-            job.update(message="Estrazione OVA…")
+            job.update(message="Extracting OVA…")
         disks = []
         with tarfile.open(path) as tar:
             for m in tar.getmembers():
@@ -153,7 +153,7 @@ def finalize(r: Runner, path: Path, job: Job | None = None) -> list[str]:
                     disks += finalize(r, d / m.name, job)
         path.unlink(missing_ok=True)
         if not disks:
-            raise ImageError("Nessun disco .vmdk nell'OVA")
+            raise ImageError("No .vmdk disk in the OVA")
         return disks
     if suf == ".iso":
         return []  # CD images stay as they are (e.g. CML refplat, installers)
@@ -165,24 +165,24 @@ def finalize(r: Runner, path: Path, job: Job | None = None) -> list[str]:
                 path.rename(dst)
             return [dst.name]
         if job:
-            job.update(None, f"Conversione {path.name} in qcow2…")
+            job.update(None, f"Converting {path.name} to qcow2…")
         r.run(["qemu-img", "convert", "-O", "qcow2", "-f", fmt, str(path), str(dst)])
         if not r.dry_run:
             path.unlink(missing_ok=True)
         return [dst.name]
     if suf == ".qcow2":
         return [path.name]
-    raise ImageError(f"Formato {suf} non supportato (qcow2, vmdk, vdi, vhd, vhdx, img, raw, ova, iso)")
+    raise ImageError(f"Format {suf} not supported (qcow2, vmdk, vdi, vhd, vhdx, img, raw, ova, iso)")
 
 
 # ------------------------------------------------------------------ download from a user-given URL
 
 def fetch(r: Runner, job: Job, name: str, url: str, filename: str | None = None) -> str:
     if not re.match(r"^https?://", url):
-        raise ImageError("Solo indirizzi http:// o https://")
+        raise ImageError("Only http:// or https:// addresses")
     d = folder(name)
     fname = filename or url.split("?")[0].rstrip("/").rsplit("/", 1)[-1] or "disk.qcow2"
-    check_name(fname, "Nome file")
+    check_name(fname, "File name")
     d.mkdir(parents=True, exist_ok=True)
     part = d / f"{fname}.part"
     if r.dry_run:
@@ -196,10 +196,10 @@ def fetch(r: Runner, job: Job, name: str, url: str, filename: str | None = None)
             while chunk := resp.read(1 << 20):
                 out.write(chunk)
                 done += len(chunk)
-                job.update(done / total if total else None, f"{done >> 20} MB" + (f" di {total >> 20} MB" if total else ""))
+                job.update(done / total if total else None, f"{done >> 20} MB" + (f" of {total >> 20} MB" if total else ""))
         part.rename(d / fname)
     disks = finalize(r, d / fname, job)
-    return f"Pronta: {', '.join(disks) or fname}"
+    return f"Ready: {', '.join(disks) or fname}"
 
 
 # ------------------------------------------------------------------ checksums
@@ -219,17 +219,17 @@ def checksum(job: Job, name: str) -> str:
                 job.update(done / total, f.name)
         db[f.name] = {"md5": h.hexdigest(), "mtime": f.stat().st_mtime}
     (d / ".netso-md5.json").write_text(json.dumps(db, indent=2))
-    return f"{len(files)} file controllati"
+    return f"{len(files)} files checked"
 
 
 def delete(name: str, force: bool = False) -> None:
     d = folder(name)
     if not d.is_dir():
-        raise FileNotFoundError(f"Immagine '{name}' inesistente")
+        raise FileNotFoundError(f"Image '{name}' does not exist")
     users = [u for u in describe() if u["name"] == name]
     labs = [u for u in (users[0]["used_by"] if users else []) if u.startswith("lab ")]
     if labs and not force:
-        raise ImageError(f"Usata da {', '.join(labs)}: i dischi dei nodi dipendono da questa immagine")
+        raise ImageError(f"Used by {', '.join(labs)}: the node disks depend on this image")
     shutil.rmtree(d)
 
 
@@ -238,14 +238,14 @@ def delete(name: str, force: bool = False) -> None:
 def _bsdtar() -> str:
     exe = shutil.which("bsdtar")
     if not exe:
-        raise ImageError("Serve 'bsdtar' (pacchetto libarchive-tools) per leggere la ISO di CML")
+        raise ImageError("Need 'bsdtar' (libarchive-tools package) to read the CML ISO")
     return exe
 
 
 def _iso_path(iso: str) -> Path:
-    p = settings.images / ISO_DIR / check_name(iso, "Nome ISO")
+    p = settings.images / ISO_DIR / check_name(iso, "ISO name")
     if not p.is_file():
-        raise ImageError(f"ISO '{iso}' non trovata in {settings.images / ISO_DIR}")
+        raise ImageError(f"ISO '{iso}' not found in {settings.images / ISO_DIR}")
     return p
 
 
@@ -270,9 +270,9 @@ def import_refplat(r: Runner, job: Job, iso: str, image_ids: list[str]) -> str:
     p, tar = _iso_path(iso), _bsdtar()
     chosen = [i for i in found["images"] if i.get("id") in image_ids]
     if not chosen:
-        raise ImageError("Nessuna immagine selezionata")
+        raise ImageError("No image selected")
     for k, img in enumerate(chosen):
-        job.update(k / len(chosen), f"Estrazione {img['id']}…")
+        job.update(k / len(chosen), f"Extracting {img['id']}…")
         dest = folder(str(img["id"]))
         dest.mkdir(parents=True, exist_ok=True)
         for disk in [img[x] for x in sorted(img) if x.startswith("disk_image") and img[x]]:
@@ -291,4 +291,4 @@ def import_refplat(r: Runner, job: Job, iso: str, image_ids: list[str]) -> str:
         if t and not any(x.source == "CML node definition" and x.image == t.image for x in templates.values()):
             catalog.save_template(t)
             created.append(t.name)
-    return f"{len(chosen)} immagini importate" + (f", dispositivi creati: {', '.join(created)}" if created else "")
+    return f"{len(chosen)} images imported" + (f", devices created: {', '.join(created)}" if created else "")

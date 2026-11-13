@@ -62,7 +62,7 @@ def _token_ok(given: str | None) -> bool:
 
 def require_auth(request: Request) -> None:
     if not _token_ok(_given(request)):
-        raise HTTPException(401, "Accesso richiesto")
+        raise HTTPException(401, "Authentication required")
 
 
 app = FastAPI(title="NetSO", version=__version__)
@@ -102,7 +102,7 @@ def _err(exc: Exception) -> HTTPException:
                         agents_mod.AgentError, diagnostics.DiagError, automation.GenerateError, srv.ServerError, ValueError)):
         return HTTPException(400, str(exc))
     # unexpected: never return an empty body (the UI would just show «Internal Server Error»)
-    return HTTPException(500, str(exc) or f"{type(exc).__name__}: errore interno")
+    return HTTPException(500, str(exc) or f"{type(exc).__name__}: internal error")
 
 
 def _lab_summary(name: str, folders: dict[str, str]) -> dict:
@@ -111,7 +111,7 @@ def _lab_summary(name: str, folders: dict[str, str]) -> dict:
         lab = topo.load_lab(name)
         desc, author, count, links = lab.description, lab.author, len(lab.nodes), len(lab.links)
     except Exception:
-        desc, author, count, links = "(definizione non valida)", "", 0, 0
+        desc, author, count, links = "(invalid definition)", "", 0, 0
     try:
         modified = topo.lab_file(name).stat().st_mtime
     except OSError:
@@ -209,7 +209,7 @@ def auth_hint():
 def auth_me(request: Request):
     user = _user_of(_given(request))
     if user is None:
-        raise HTTPException(401, "Accesso richiesto")
+        raise HTTPException(401, "Authentication required")
     return {"user": user, "auth": settings.auth, "role": users.role_of(user), "default_password": users.is_default_password(user)}
 
 
@@ -230,9 +230,9 @@ class Password(BaseModel):
 def auth_password(body: Password, request: Request):
     user = _user_of(_given(request))
     if user is None or user == "api":
-        raise HTTPException(401, "Accesso richiesto")
+        raise HTTPException(401, "Authentication required")
     if settings.auth and not users.check_password(user, body.old):
-        raise HTTPException(400, "La password attuale non è corretta")
+        raise HTTPException(400, "The current password is not correct")
     try:
         users.set_password(user, body.new)
     except Exception as exc:
@@ -279,7 +279,7 @@ def _labs_using(template: str) -> list[str]:
 @app.post("/api/templates", dependencies=[api], status_code=201)
 def create_template(tpl: Template):
     if tpl.name in topo.load_templates():
-        raise HTTPException(409, f"Esiste già un dispositivo '{tpl.name}'")
+        raise HTTPException(409, f"A device '{tpl.name}' already exists")
     catalog.save_template(tpl)
     return {"ok": True, "name": tpl.name}
 
@@ -287,9 +287,9 @@ def create_template(tpl: Template):
 @app.put("/api/templates/{name}", dependencies=[api])
 def update_template(name: str, tpl: Template):
     if name not in topo.load_templates():
-        raise HTTPException(404, f"Dispositivo '{name}' inesistente")
+        raise HTTPException(404, f"Device '{name}' does not exist")
     if tpl.name != name and _labs_using(name):
-        raise HTTPException(400, "Il dispositivo è usato nei lab: non si può rinominare")
+        raise HTTPException(400, "The device is used in labs: it cannot be renamed")
     try:
         catalog.save_template(tpl, old_name=name)
     except Exception as exc:
@@ -343,13 +343,13 @@ async def upload_image(name: str, filename: str, request: Request):
     """Raw streamed body (no multipart): the browser sends the File as is."""
     try:
         d = imgs.folder(name)
-        imgs.check_name(filename, "Nome file")
+        imgs.check_name(filename, "File name")
     except Exception as exc:
         raise _err(exc)
     try:
         d.mkdir(parents=True, exist_ok=True)
     except OSError as exc:
-        raise HTTPException(500, f"Cartella immagini {d.parent} non scrivibile: {exc.strerror}")
+        raise HTTPException(500, f"Images folder {d.parent} not writable: {exc.strerror}")
     part = d / f"{filename}.part"
     try:
         with open(part, "wb") as fh:
@@ -362,7 +362,7 @@ async def upload_image(name: str, filename: str, request: Request):
     part.replace(target)
     if name == imgs.ISO_DIR:
         return {"ok": True, "job": None}
-    job = jobs.start("convert", f"{name}/{filename}", lambda j: "Pronta: " + (", ".join(imgs.finalize(engine.r, target, j)) or filename))
+    job = jobs.start("convert", f"{name}/{filename}", lambda j: "Ready: " + (", ".join(imgs.finalize(engine.r, target, j)) or filename))
     return {"ok": True, "job": job.id}
 
 
@@ -413,7 +413,7 @@ async def upload_icon(name: str, filename: str, request: Request):
     async for chunk in request.stream():
         data += chunk
         if len(data) > icons_mod.MAX_BYTES + 4096:
-            raise HTTPException(400, "Icona troppo grande (max 2 MB)")
+            raise HTTPException(400, "Icon too large (max 2 MB)")
     try:
         return icons_mod.save(name, filename, data)
     except Exception as exc:
@@ -633,7 +633,7 @@ def ask_agent(aid: str, body: AskBody):
                 try:
                     out = diagnostics.run(body.lab, node, cmd)
                 except Exception as exc:  # report the failure to the model, don't abort
-                    out = f"ERRORE: {exc}"
+                    out = f"ERROR: {exc}"
                 transcript.append({"node": node, "cmd": cmd, "output": out})
                 obs.append(f"$ {node}: {cmd}\n{out}")
             prompt = (f"{prompt}\n\n[Le tue direttive]\n{reply}\n\n[Output dei comandi]\n" + "\n\n".join(obs)
@@ -688,7 +688,7 @@ def set_iol_license(body: IourcBody):
         f.unlink(missing_ok=True)
         return iol_license()
     if "[license]" not in text or len(text) > 4096:
-        raise HTTPException(400, "Non sembra un file iourc: deve contenere [license] e una riga '<nome host> = <chiave>;'")
+        raise HTTPException(400, "This does not look like an iourc file: it must contain [license] and a line '<hostname> = <key>;'")
     f.parent.mkdir(parents=True, exist_ok=True)
     f.write_text(text + "\n")
     f.chmod(0o600)
@@ -730,13 +730,13 @@ async def docker_upload(filename: str, request: Request, tag: str | None = None)
     """Raw streamed tar (docker save, or a root filesystem like cEOS-lab.tar.xz with `tag`), then docker load/import.
     Not /docker/upload: PUT /api/images/{name}/upload would catch it."""
     try:
-        imgs.check_name(filename, "Nome file")
+        imgs.check_name(filename, "File name")
         if tag:
             dockerimg.check_ref(tag)
         d = dockerimg.upload_dir()
         d.mkdir(parents=True, exist_ok=True)
     except OSError as exc:
-        raise HTTPException(500, f"Cartella {dockerimg.upload_dir()} non scrivibile: {exc.strerror}")
+        raise HTTPException(500, f"Folder {dockerimg.upload_dir()} not writable: {exc.strerror}")
     except Exception as exc:
         raise _err(exc)
     target = d / filename
@@ -811,11 +811,11 @@ def get_share(name: str):
 @app.put("/api/labs/{name}/share", dependencies=[api])
 def put_share(name: str, body: ShareBody):
     if name not in topo.list_labs():
-        raise HTTPException(404, f"Lab '{name}' inesistente")
+        raise HTTPException(404, f"Lab '{name}' does not exist")
     known = users.users()
     bad = [u for u in body.shared if u not in known]
     if bad:
-        raise HTTPException(400, f"Utenti inesistenti: {', '.join(bad)}")
+        raise HTTPException(400, f"Unknown users: {', '.join(bad)}")
     return {"shared": acl.set_shared(name, body.shared), "owner": acl.meta(name)["owner"]}
 
 
@@ -835,11 +835,11 @@ class NewUser(BaseModel):
 @app.post("/api/users", dependencies=[api], status_code=201)
 def create_user(body: NewUser):
     if body.username in users.users():
-        raise HTTPException(409, f"Esiste già un utente '{body.username}'")
+        raise HTTPException(409, f"A user '{body.username}' already exists")
     if not body.password:
-        raise HTTPException(400, "Password mancante")
+        raise HTTPException(400, "Missing password")
     if (body.role or "user") not in acl.ROLES:
-        raise HTTPException(400, "Ruolo sconosciuto (admin, user, viewer)")
+        raise HTTPException(400, "Unknown role (admin, user, viewer)")
     try:
         users.set_password(body.username, body.password, body.role or "user")
     except Exception as exc:
@@ -851,7 +851,7 @@ def create_user(body: NewUser):
 def update_user(username: str, body: NewUser):
     """New password and/or new role."""
     if username not in users.users():
-        raise HTTPException(404, f"Utente '{username}' inesistente")
+        raise HTTPException(404, f"User '{username}' does not exist")
     try:
         if body.password:
             users.set_password(username, body.password)
@@ -865,7 +865,7 @@ def update_user(username: str, body: NewUser):
 @app.delete("/api/users/{username}", dependencies=[api])
 def delete_user(username: str, request: Request):
     if username == _user_of(_given(request)):
-        raise HTTPException(400, "Non puoi eliminare l'utente con cui sei collegato")
+        raise HTTPException(400, "You cannot delete the user you are logged in as")
     try:
         users.delete_user(username)
     except Exception as exc:
@@ -930,7 +930,7 @@ def create_lab(body: NewLab, request: Request):
         lab.author = body.author or (user if user and user != "api" else "")
     acl.set_owner(lab.name, user if user and user != "api" else "admin")
     if lab.name in topo.list_labs():
-        raise HTTPException(409, f"Esiste già un lab '{lab.name}'")
+        raise HTTPException(409, f"A lab '{lab.name}' already exists")
     try:
         lib.set_lab_folder(lab.name, body.folder)
     except Exception as exc:
@@ -983,7 +983,7 @@ def generate_lab(body: GenLab, request: Request):
     """Create a brand-new lab: either a bare topology (clos/ring/…) or a ready protocol scenario."""
     import time
     if body.name in topo.list_labs():
-        raise HTTPException(409, f"Esiste già un lab '{body.name}'")
+        raise HTTPException(409, f"A lab '{body.name}' already exists")
     user = _user_of(_given(request))
     configs: dict[str, str] = {}
     solution: dict[str, str] = {}
@@ -1070,12 +1070,12 @@ def _parse_import(body: ImportBody) -> interop.Imported:
     try:
         raw = base64.b64decode(body.data, validate=False)
     except (binascii.Error, ValueError) as exc:
-        raise HTTPException(400, f"Contenuto del file non valido: {exc}")
+        raise HTTPException(400, f"Invalid file content: {exc}")
     if len(raw) > MAX_IMPORT:
-        raise HTTPException(400, "File troppo grande (max 40 MB): esporta il progetto senza immagini")
+        raise HTTPException(400, "File too large (max 40 MB): export the project without images")
     name = body.name.strip() if body.name else None
     if name and not interop.valid_name(name):
-        raise HTTPException(400, "Nome lab non valido")
+        raise HTTPException(400, "Invalid lab name")
     try:
         return interop.import_file(body.filename, raw, topo.load_templates(), body.overrides, name)
     except Exception as exc:
@@ -1097,7 +1097,7 @@ def import_preview(body: ImportBody):
 def import_lab(body: ImportBody, request: Request):
     imp = _parse_import(body)
     if imp.lab.name in topo.list_labs():
-        raise HTTPException(409, f"Esiste già un lab '{imp.lab.name}': scegli un altro nome")
+        raise HTTPException(409, f"A lab '{imp.lab.name}' already exists: choose another name")
     try:
         lib.set_lab_folder(imp.lab.name, body.folder)
     except Exception as exc:
@@ -1125,10 +1125,10 @@ def export_lab(name: str, format: str = "netso"):
         fn = interop.export_clab if format == "clab" else interop.export_cml
         text, warns = fn(lab, topo.load_templates(), configs)
         if warns:
-            text = "".join(f"# NOTA: {w}\n" for w in warns) + text
+            text = "".join(f"# NOTE: {w}\n" for w in warns) + text
         fname = f"{name}.clab.yml" if format == "clab" else f"{name}.cml.yaml"
     else:
-        raise HTTPException(400, "Formato di esportazione sconosciuto (netso, clab, cml)")
+        raise HTTPException(400, "Unknown export format (netso, clab, cml)")
     return PlainTextResponse(text, headers={"Content-Disposition": f'attachment; filename="{fname}"'})
 
 
@@ -1182,7 +1182,7 @@ def save_configs(name: str, body: SaveCfgBody, request: Request):
         if body.new_set:
             topo.create_config_set(name, dest, lab.config_set)
         elif dest not in topo.config_sets(name):
-            raise HTTPException(400, f"Config set '{dest}' inesistente")
+            raise HTTPException(400, f"Config set '{dest}' does not exist")
     except HTTPException:
         raise
     except Exception as exc:
@@ -1196,8 +1196,8 @@ def save_configs(name: str, body: SaveCfgBody, request: Request):
         job.result = {"set": dest, "results": res}
         if not ok and bad:
             raise RuntimeError("; ".join(bad))
-        return f"Salvate in '{dest}': {', '.join(ok) or 'nessuna'}" + (f" · non salvate: {'; '.join(bad)}" if bad else "")
-    job = jobs.start("savecfg", f"Config di {name}", work)
+        return f"Saved in '{dest}': {', '.join(ok) or 'none'}" + (f" · not saved: {'; '.join(bad)}" if bad else "")
+    job = jobs.start("savecfg", f"Configs of {name}", work)
     return {"job": job.id, "set": dest}
 
 
@@ -1205,7 +1205,7 @@ def save_configs(name: str, body: SaveCfgBody, request: Request):
 def get_job(job_id: str):
     j = next((x for x in jobs.list_jobs() if x["id"] == job_id), None)
     if not j:
-        raise HTTPException(404, "Lavoro inesistente")
+        raise HTTPException(404, "Job does not exist")
     return j
 
 
@@ -1222,7 +1222,7 @@ def inventory(name: str, request: Request, format: str = "json"):
     fn = {"ansible": (automation.ansible_inventory, f"{name}-inventory.yml"), "hosts": (automation.hosts_file, f"{name}.hosts"),
           "ssh": (automation.ssh_config, f"{name}.ssh_config")}.get(format)
     if not fn:
-        raise HTTPException(400, "Formato sconosciuto (json, ansible, hosts, ssh)")
+        raise HTTPException(400, "Unknown format (json, ansible, hosts, ssh)")
     return PlainTextResponse(fn[0](lab, rows), headers={"Content-Disposition": f'attachment; filename="{fn[1]}"'})
 
 
@@ -1288,7 +1288,7 @@ class MoveLab(BaseModel):
 @app.post("/api/labs/{name}/move", dependencies=[api])
 def move_lab(name: str, body: MoveLab):
     if name not in topo.list_labs():
-        raise HTTPException(404, f"Lab '{name}' inesistente")
+        raise HTTPException(404, f"Lab '{name}' does not exist")
     try:
         return {"folder": lib.set_lab_folder(name, body.folder)}
     except Exception as exc:
@@ -1313,7 +1313,7 @@ def get_lab(name: str, request: Request):
 @app.put("/api/labs/{name}", dependencies=[api])
 def put_lab(name: str, lab: Lab):
     if lab.name != name:
-        raise HTTPException(400, "Il nome del lab non si può cambiare qui")
+        raise HTTPException(400, "The lab name cannot be changed here")
     topo.save_lab(lab)
     try:
         topo.validate_lab(lab)
@@ -1363,7 +1363,7 @@ def put_yaml(name: str, body: YamlBody):
     try:
         lab = topo.parse_lab_yaml(body.yaml)
         if lab.name != name:
-            raise topo.TopologyError("Il campo 'name' deve restare uguale al nome del lab")
+            raise topo.TopologyError("The 'name' field must stay equal to the lab name")
         topo.validate_lab(lab)
     except Exception as exc:
         raise _err(exc)
@@ -1375,7 +1375,7 @@ def put_yaml(name: str, body: YamlBody):
 def delete_lab(name: str):
     state = engine.refresh(name)
     if any(n.status == "running" for n in state.nodes.values()):
-        raise HTTPException(400, "Fai destroy del lab prima di eliminarlo")
+        raise HTTPException(400, "Destroy the lab before deleting it")
     topo.delete_lab(name)
     lib.forget_lab(name)
     acl.forget(name)
@@ -1428,12 +1428,12 @@ async def open_console(name: str, node: str, body: OpenBody):
     try:
         ns = load_state(name).nodes.get(node)
         if ns is None or ns.status != "running":
-            raise EngineError("Il nodo non è in esecuzione")
+            raise EngineError("The node is not running")
         kind = ns.console or "telnet"
         if kind == "spice":
             return {"type": kind, "port": ns.spice_port}
         if kind not in GUEST_PORTS or kind == "ssh":
-            raise EngineError(f"La consolle {kind} si apre nel terminale")
+            raise EngineError(f"The {kind} console opens in the terminal")
         ip = engine.guest_ip(name, node)
         if kind in ("rdp", "rdp-tls"):
             await asyncio.to_thread(guac.ensure_guacd, engine.r)
@@ -1489,7 +1489,7 @@ def node_action(name: str, node: str, action: str):
             return {"ok": True}
     except Exception as exc:
         raise _err(exc)
-    raise HTTPException(404, f"Azione sconosciuta: {action}")
+    raise HTTPException(404, f"Unknown action: {action}")
 
 
 # --------------------------------------------------------- startup configs
@@ -1569,7 +1569,7 @@ def delete_config_set(name: str, cfg_set: str):
 def activate_config_set(name: str, cfg_set: str):
     try:
         if cfg_set not in topo.config_sets(name):
-            raise FileNotFoundError(f"Config set '{cfg_set}' inesistente")
+            raise FileNotFoundError(f"Config set '{cfg_set}' does not exist")
         _set_active(name, cfg_set)
         return {"ok": True}
     except Exception as exc:
@@ -1623,7 +1623,7 @@ def import_config_set(name: str, body: ImportBody):
     try:
         data = yaml.safe_load(body.yaml) or {}
         if not isinstance(data, dict) or not isinstance(data.get("configs"), dict):
-            raise topo.TopologyError("File non valido: serve un oggetto con 'configs: {nodo: testo}'")
+            raise topo.TopologyError("Invalid file: it needs an object with 'configs: {node: text}'")
         cfg_set = body.name or data.get("config_set") or topo.DEFAULT_SET
         if cfg_set not in topo.config_sets(name):
             topo.create_config_set(name, cfg_set)
@@ -1687,7 +1687,7 @@ def download_capture(name: str, cid: str):
     except Exception as exc:
         raise _err(exc)
     if not f.exists():
-        raise HTTPException(404, "Cattura inesistente")
+        raise HTTPException(404, "Capture does not exist")
     media = "application/x-pcapng" if f.suffix == ".pcapng" else "application/vnd.tcpdump.pcap"
     return FileResponse(f, media_type=media, filename=f"{name}_{f.name}")
 
@@ -1728,7 +1728,7 @@ async def capture_live(ws: WebSocket, name: str, cid: str):
     await ws.accept()
     cap = engine.captures.get(name, cid)
     if cap is None:
-        await ws.send_json({"packets": [], "info": None, "error": "Cattura non attiva"})
+        await ws.send_json({"packets": [], "info": None, "error": "Capture not active"})
         await ws.close()
         return
     last = int(ws.query_params.get("since", "0") or 0)
@@ -1772,7 +1772,7 @@ def open_in_wireshark(name: str, body: OpenCaptureBody):
     try:
         f = engine.captures.file(name, body.capture)
         if not f.exists():
-            raise FileNotFoundError("Cattura inesistente")
+            raise FileNotFoundError("Capture does not exist")
         node, iface = (body.capture.split("_") + ["", ""])[:2]
         return engine.wireshark.start(name, node, iface, None, readfile=f.name).info()
     except Exception as exc:
@@ -1835,13 +1835,13 @@ async def wireshark_vnc(ws: WebSocket, name: str, sid: str):
         return
     s = engine.wireshark.get(name, sid)
     if s is None or s.stopped is not None:
-        await ws.close(code=4404, reason="Sessione Wireshark terminata")
+        await ws.close(code=4404, reason="Wireshark session ended")
         return
     await ws.accept(subprotocol="binary" if "binary" in ws.scope.get("subprotocols", []) else None)
     engine.wireshark.attach(s)
     try:
         # the container needs a moment to bring Xvnc up
-        await _proxy_tcp(ws, s.port, 4 if settings.dry_run else 40, lambda: s.stopped is None, "Wireshark non raggiungibile")
+        await _proxy_tcp(ws, s.port, 4 if settings.dry_run else 40, lambda: s.stopped is None, "Wireshark unreachable")
     finally:
         engine.wireshark.detach(s)
 
@@ -1869,10 +1869,10 @@ async def node_vnc(ws: WebSocket, name: str, node: str):
         return
     ns = load_state(name).nodes.get(node)
     if ns is None or ns.status != "running" or ns.kind != "qemu" or ns.vnc_display is None:
-        await ws.close(code=4404, reason="Il nodo non è in esecuzione")
+        await ws.close(code=4404, reason="The node is not running")
         return
     await ws.accept(subprotocol="binary" if "binary" in ws.scope.get("subprotocols", []) else None)
-    await _proxy_tcp(ws, 5900 + ns.vnc_display, 4, lambda: True, "VNC del nodo non raggiungibile")
+    await _proxy_tcp(ws, 5900 + ns.vnc_display, 4, lambda: True, "Node VNC unreachable")
 
 
 @app.websocket("/api/labs/{name}/nodes/{node}/guac")
@@ -1883,14 +1883,14 @@ async def node_guac(ws: WebSocket, name: str, node: str):
         return
     t = guac.take_ticket(ws.query_params.get("ticket", ""), name, node)
     if t is None:
-        await ws.close(code=4403, reason="Richiesta scaduta: riapri la consolle")
+        await ws.close(code=4403, reason="Request expired: reopen the console")
         return
     await ws.accept(subprotocol="guacamole" if "guacamole" in ws.scope.get("subprotocols", []) else None)
     try:
         reader, writer = await asyncio.open_connection("127.0.0.1", guac.GUACD_PORT)
         rest, dec = await guac.handshake(reader, writer, "rdp", t.params, int(t.params.get("width", 1280)), int(t.params.get("height", 800)))
     except Exception as exc:
-        await ws.send_text(guac.tunnel_uuid_instruction() + guac.encode("error", f"guacd non raggiungibile: {exc}", "519"))
+        await ws.send_text(guac.tunnel_uuid_instruction() + guac.encode("error", f"guacd unreachable: {exc}", "519"))
         await ws.close()
         return
     await ws.send_text(guac.tunnel_uuid_instruction())

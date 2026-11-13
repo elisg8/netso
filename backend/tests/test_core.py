@@ -53,9 +53,9 @@ def test_validate_and_plan():
 
 
 @pytest.mark.parametrize("bad, msg", [
-    ("links: [{endpoints: [r1:Gi9/9, h1:eth1]}]", "non disponibile"),
-    ("links: [{endpoints: [nope:eth1, h1:eth1]}]", "inesistente"),
-    ("links: [{endpoints: [r1:Gi0/0, h1:eth1]}, {endpoints: [r1:Gi0/0, h1:eth2]}]", "due link"),
+    ("links: [{endpoints: [r1:Gi9/9, h1:eth1]}]", "not available"),
+    ("links: [{endpoints: [nope:eth1, h1:eth1]}]", "does not exist"),
+    ("links: [{endpoints: [r1:Gi0/0, h1:eth1]}, {endpoints: [r1:Gi0/0, h1:eth2]}]", "used in two links"),
 ])
 def test_validation_errors(bad, msg):
     text = "name: t2\nnodes:\n  - {name: r1, template: cisco-iosv}\n  - {name: h1, template: alpine}\n" + bad
@@ -117,7 +117,7 @@ links:
 
 
 def test_link_conditioning_validation():
-    with pytest.raises(topo.TopologyError, match="tra 0 e 100"):
+    with pytest.raises(topo.TopologyError, match="between 0 and 100"):
         topo.parse_lab_yaml(
             "name: bad\nnodes: [{name: h1, template: alpine}, {name: h2, template: alpine}]\n"
             "links: [{endpoints: [h1:eth1, h2:eth1], loss_pct: 150}]"
@@ -275,7 +275,7 @@ def test_capture_dry_run():
     topo.save_lab(lab)
     r = Runner(force_dry_run=True)
     eng = Engine(r)
-    with pytest.raises(Exception, match="non è in esecuzione"):
+    with pytest.raises(Exception, match="is not running"):
         eng.capture_iface("t1", "r1", "Gi0/0")
     eng.deploy("t1")
     host = eng.capture_iface("t1", "r1", "Gi0/0")
@@ -667,7 +667,7 @@ def test_import_gns3_project_zip():
     t = {n.name: n.template for n in imp.lab.nodes}
     assert t == {"R1": "cisco-iosv", "Switch-1": "bridge", "PC1": "vpc"}
     assert _links(imp.lab) == sorted([("R1:Gi0/0", "Switch-1:port1"), ("PC1:eth1", "Switch-1:port2")])
-    assert any("rinominato" in w for w in imp.warnings)
+    assert any("renamed" in w for w in imp.warnings)
     topo.validate_lab(imp.lab)
 
 
@@ -1220,7 +1220,7 @@ def test_import_images_from_pnetlab(tmp_path):
     assert by["iol-i86bi-linux-l3"]["template"] == "cisco-iol"
     assert by["vios-adventerprisek9-m.SPA.159-3.M6"]["template"] == "cisco-iosv"
     assert by["c7200-adventerprisek9-mz.152-4.M7"]["template"] == "cisco-c7200"
-    assert found["notes"] and "per 'pnetlab'" in found["notes"][0] and found["iourc"] is None  # another host's license: not copied
+    assert found["notes"] and "is for 'pnetlab'" in found["notes"][0] and found["iourc"] is None  # another host's license: not copied
     assert pnetimport.scan(str(root), r)["items"]  # /opt/unetlab works too
     import socket
     mine = root / "mine"
@@ -1235,14 +1235,14 @@ def test_import_images_from_pnetlab(tmp_path):
     real = pnetimport.shutil.disk_usage
     pnetimport.shutil.disk_usage = lambda p: collections.namedtuple("U", "total used free")(10, 9, 1 << 30)
     try:
-        with pytest.raises(pnetimport.PnetError, match="Spazio insufficiente"):
+        with pytest.raises(pnetimport.PnetError, match="Not enough space"):
             pnetimport.run_import(r, Job(id="t", kind="pnet", label="x"), str(root / "addons"), None, False)
     finally:
         pnetimport.shutil.disk_usage = real
     msg = pnetimport.run_import(r, Job(id="t", kind="pnet", label="x"), str(root / "addons"), None, False)
-    assert "7 immagini" in msg
+    assert "7 images" in msg
     assert (settings.images / "iol-i86bi-linux-l3" / "i86bi-linux-l3.bin").exists()
-    assert "librerie IOL: libcrypto.so.4" in msg and (settings.home / "iol-lib" / "libcrypto.so.4").exists()
+    assert "IOL libraries: libcrypto.so.4" in msg and (settings.home / "iol-lib" / "libcrypto.so.4").exists()
     assert (settings.images / "asav-981" / "virtioa.qcow2").exists()
     assert (settings.images / "c7200-adventerprisek9-mz.152-4.M7" / "c7200-adventerprisek9-mz.152-4.M7.image").exists()
     t = topo.load_templates()
@@ -1255,17 +1255,17 @@ def test_import_images_from_pnetlab(tmp_path):
     assert t["nxosv9k"].disk_bus == "sata" and t["nxosv9k"].icon == "l3switch"
     assert (t["ccie"].icon, t["ccie"].console, t["ccie"].interface_names()[0]) == ("server", "vnc", "eth0")  # a Linux VM
     # again: everything is already there
-    assert "Niente" in pnetimport.run_import(r, Job(id="t", kind="pnet", label="x"), str(root / "addons"), None, False)
+    assert "Nothing to import" in pnetimport.run_import(r, Job(id="t", kind="pnet", label="x"), str(root / "addons"), None, False)
     # a Linux VM taken for a router by an older import is fixed
     from netso import catalog
     catalog.save_template(t["ccie"].model_copy(update={"icon": "router", "console": "telnet"}))
-    assert "collegati: ccie" in pnetimport.run_import(r, Job(id="t", kind="pnet", label="x"), str(root / "addons"), None, False)
+    assert "linked: ccie" in pnetimport.run_import(r, Job(id="t", kind="pnet", label="x"), str(root / "addons"), None, False)
     assert (topo.load_templates()["ccie"].icon, topo.load_templates()["ccie"].console) == ("server", "vnc")
     # a run that stopped after copying (no devices yet) is completed by the next one
     from netso import catalog
     catalog.user_file("asav").unlink()
-    assert "nuovi dispositivi: asav" in pnetimport.run_import(r, Job(id="t", kind="pnet", label="x"), str(root / "addons"), None, False)
-    assert "Niente" in pnetimport.run_import(r, Job(id="t", kind="pnet", label="x"), str(root / "addons"), None, False)
+    assert "new devices: asav" in pnetimport.run_import(r, Job(id="t", kind="pnet", label="x"), str(root / "addons"), None, False)
+    assert "Nothing to import" in pnetimport.run_import(r, Job(id="t", kind="pnet", label="x"), str(root / "addons"), None, False)
 
     remote = pnetimport.Source("root@10.0.0.5:/opt/unetlab/addons", r)
     assert remote.remote and remote.target == "root@10.0.0.5"
@@ -1282,7 +1282,7 @@ def test_docker_images(tmp_path):
     assert frr["pullable"] and not frr["present"]
     assert not next(t for t in d["templates"] if t["template"] == "arista-ceos")["pullable"]
     assert dockerimg.normalize("alpine") == "alpine:latest" and dockerimg.normalize("quay.io/x/frr:1") == "quay.io/x/frr:1"
-    assert "Scaricata" in dockerimg.pull(r, Job(id="t", kind="docker", label="x"), "quay.io/frrouting/frr:10.2.1")
+    assert "Pulled" in dockerimg.pull(r, Job(id="t", kind="docker", label="x"), "quay.io/frrouting/frr:10.2.1")
     assert r.log[-1] == "docker pull quay.io/frrouting/frr:10.2.1"
     with pytest.raises(dockerimg.DockerImageError):
         dockerimg.pull(r, Job(id="t", kind="docker", label="x"), "-rm; reboot")
@@ -1317,7 +1317,7 @@ def test_docker_missing_image_message():
     d = DockerDriver(R(force_dry_run=True))
     with pytest.raises(RuntimeError, match="vrnetlab"):
         d.ensure_image("vrnetlab/cisco_iol:17.12.01")
-    with pytest.raises(RuntimeError, match="Carica .tar"):
+    with pytest.raises(RuntimeError, match="Load .tar"):
         d.ensure_image("ceos:latest")
 
 
@@ -1478,7 +1478,7 @@ def test_guest_consoles_rdp_http_ssh(monkeypatch):
     assert c.post("/api/labs/gst1/nodes/sp/open", json={}).json() == {"type": "spice", "port": st["sp"].spice_port}
     assert "ssh" in " ".join(api_mod.engine.console_command("gst1", "sh")) and "10.1.1.1" in api_mod.engine.console_command("gst1", "sh")
     r = c.post("/api/labs/gst1/nodes/noip/open", json={})
-    assert r.status_code == 400 and "IP di gestione" in r.json()["detail"]
+    assert r.status_code == 400 and "management IP" in r.json()["detail"]
 
     # HTTP: a port of the server forwarded to the guest's web server
     web = socket.socket()
@@ -1604,7 +1604,7 @@ def test_iol_binary_lookup():
     (settings.images / "iol-half").mkdir(exist_ok=True)
     (settings.images / "iol-half" / "x.bin.part").write_bytes(b"\x7fELF")
     assert "iol-noext" in imgs.folders_with_disks() and "iol-half" not in imgs.folders_with_disks()
-    assert imgs.iol_problems() == ["iol-half: copia non finita (.part), rilancia l'import da PNETLab"]
+    assert imgs.iol_problems() == ["iol-half: unfinished copy (.part), re-run the import from PNETLab"]
 
 
 def test_custom_icons_module():
@@ -1845,7 +1845,7 @@ def test_assistant_live_loop():
     # the loop parsed the directive, executed it (node off → reported error) and recorded a transcript
     assert body["transcript"] and body["transcript"][0]["node"] == "r1"
     assert body["transcript"][0]["cmd"] == "show ip ospf neighbor"
-    assert "spento" in body["transcript"][0]["output"] or "ERRORE" in body["transcript"][0]["output"]
+    assert "powered off" in body["transcript"][0]["output"] or "ERROR" in body["transcript"][0]["output"]
 
 
 def test_assistant_chat_history():

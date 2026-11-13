@@ -33,7 +33,7 @@ class Console:
         try:
             self.s = socket.create_connection((host, port), timeout=timeout)
         except OSError as exc:
-            raise SaveError(f"consolle non raggiungibile ({exc.strerror or exc})") from exc
+            raise SaveError(f"console not reachable ({exc.strerror or exc})") from exc
         self.s.settimeout(0.3)
         self.buf = b""
 
@@ -65,7 +65,7 @@ class Console:
         except (TimeoutError, socket.timeout):
             return b""
         if not data:
-            raise SaveError("la consolle ha chiuso la connessione")
+            raise SaveError("the console closed the connection")
         data = self._filter(data)
         self.buf += data
         return data
@@ -89,7 +89,7 @@ class Console:
             if poke and time.time() - last_poke > poke:
                 self.s.sendall(b"\r")
                 last_poke = time.time()
-        raise SaveError("nessun prompt dalla consolle (il dispositivo sta ancora avviandosi?)")
+        raise SaveError("no prompt from the console (is the device still booting?)")
 
     def close(self) -> None:
         try:
@@ -125,13 +125,13 @@ def console_config(host: str, port: int, commands: list[str], enable: bool = Fal
             c.send("no")
             first = c.wait(30, poke=5)
         if LOGIN.search(first.rstrip()):
-            raise SaveError("il dispositivo chiede utente/password sulla consolle")
+            raise SaveError("the device is asking for username/password on the console")
         prompt = (PROMPT.search(first.rstrip()) or [None, b""])[1]
         if prompt.rstrip().endswith(b">") and enable:
             c.send("enable")
             out = c.wait(10)
             if LOGIN.search(out.rstrip()):
-                raise SaveError("'enable' chiede una password")
+                raise SaveError("'enable' is asking for a password")
         result = ""
         for cmd in commands:
             c.send(cmd)
@@ -162,23 +162,23 @@ def save_configs(r: Runner, job: Job | None, lab_name: str, nodes: list[str] | N
         if tpl is None or tpl.kind not in ("qemu", "docker", "dynamips", "iol"):
             continue
         if not ns or ns.status != "running":
-            results[n.name] = "spento"
+            results[n.name] = "powered off"
             continue
         try:
             if tpl.kind == "docker":
                 if not tpl.save_cmd:
-                    raise SaveError(f"il template {tpl.name} non sa esportare la config")
+                    raise SaveError(f"the template {tpl.name} cannot export the config")
                 text = container_config(r, ns.container or "", tpl.save_cmd)
             else:
                 if not tpl.save_cli or not ns.console_port:
-                    raise SaveError(f"il template {tpl.name} non sa esportare la config dalla consolle")
+                    raise SaveError(f"the template {tpl.name} cannot export the config from the console")
                 if r.dry_run:
                     r.log.append(f"console {host}:{ns.console_port} <- {tpl.save_cli}")
-                    text = f"! config di prova di {n.name}\nhostname {n.name}\n"
+                    text = f"! test config for {n.name}\nhostname {n.name}\n"
                 else:
                     text = console_config(host, ns.console_port, tpl.save_cli, tpl.save_enable)
             if not text.strip():
-                raise SaveError("configurazione vuota")
+                raise SaveError("empty configuration")
             topo.write_config(lab_name, cfg_set, n.name, text)
             results[n.name] = "ok"
         except Exception as exc:

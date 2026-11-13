@@ -34,18 +34,18 @@ def parse_vlans(text: str) -> list[tuple[int, int]]:
         a, _, b = part.partition("-")
         lo, hi = int(a), int(b or a)
         if not (1 <= lo <= hi <= 4094):
-            raise ValueError(f"VLAN '{part}' non valida (1-4094)")
+            raise ValueError(f"VLAN '{part}' invalid (1-4094)")
         out.append((lo, hi))
     if not out:
-        raise ValueError("Elenco VLAN vuoto")
+        raise ValueError("Empty VLAN list")
     return out
 
 
 def _check_name(value: str, what: str) -> str:
     if not NAME_RE.match(value):
         raise ValueError(
-            f"{what} '{value}' non valido: deve iniziare con una lettera e contenere "
-            "solo lettere, numeri, '-' o '_' (max 32 caratteri)"
+            f"{what} '{value}' invalid: must start with a letter and contain "
+            "only letters, numbers, '-' or '_' (max 32 characters)"
         )
     return value
 
@@ -59,8 +59,8 @@ def _check_lab_name(value: str) -> str:
     v = (value or "").strip()
     if not LAB_NAME_RE.match(v) or "  " in v:
         raise ValueError(
-            f"Nome lab '{value}' non valido: inizia con una lettera; lettere, numeri, spazi singoli, "
-            "'-' e '_' (max 48 caratteri)"
+            f"Lab name '{value}' invalid: starts with a letter; letters, numbers, single spaces, "
+            "'-' and '_' (max 48 characters)"
         )
     return v
 
@@ -73,8 +73,8 @@ def _check_node_name(value: str) -> str:
     v = (value or "").strip()
     if not NODE_NAME_RE.match(v) or "  " in v or ":" in v:
         raise ValueError(
-            f"Nome nodo '{value}' non valido: inizia con una lettera; lettere, numeri, spazi singoli, "
-            "'-' e '_' (max 32 caratteri)"
+            f"Node name '{value}' invalid: starts with a letter; letters, numbers, single spaces, "
+            "'-' and '_' (max 32 characters)"
         )
     return v
 
@@ -133,28 +133,28 @@ class Template(BaseModel):
     @field_validator("name")
     @classmethod
     def _tname(cls, v: str) -> str:
-        return _check_name(v, "Nome template")
+        return _check_name(v, "Template name")
 
     @model_validator(mode="after")
     def _dynamips(self):
         if self.kind == "dynamips":
             if self.machine not in DYNAMIPS_PLATFORMS:
-                raise ValueError(f"Piattaforma Dynamips '{self.machine}' (usa {', '.join(DYNAMIPS_PLATFORMS)})")
+                raise ValueError(f"Dynamips platform '{self.machine}' (use {', '.join(DYNAMIPS_PLATFORMS)})")
             bad = [a for a in self.slots or [] if a and a not in DYNAMIPS_ADAPTERS]
             if bad:
-                raise ValueError(f"Adattatori Dynamips sconosciuti: {', '.join(bad)}")
+                raise ValueError(f"Unknown Dynamips adapters: {', '.join(bad)}")
             self.nics = len(self.interface_names())
         if self.kind == "iol" and not 1 <= self.nics <= 16:
-            raise ValueError("IOL: da 1 a 16 interfacce (4 per gruppo, e0/0 … e3/3)")
+            raise ValueError("IOL: 1 to 16 interfaces (4 per group, e0/0 … e3/3)")
         return self
 
     @model_validator(mode="after")
     def _ifaces(self):
         if self.interfaces is not None:
             if len(set(self.interfaces)) != len(self.interfaces) or not all(self.interfaces):
-                raise ValueError("I nomi delle interfacce devono essere tutti diversi e non vuoti")
+                raise ValueError("Interface names must all be distinct and non-empty")
             if self.kind == "docker" and not all(re.fullmatch(r"[A-Za-z0-9_.-]{1,15}", i) for i in self.interfaces):
-                raise ValueError("Interfacce di un container: max 15 caratteri tra lettere, numeri, _ . - (niente /)")
+                raise ValueError("Container interfaces: max 15 characters from letters, numbers, _ . - (no /)")
         return self
 
     def interface_names(self, nics: int | None = None) -> list[str]:
@@ -226,9 +226,9 @@ class Node(BaseModel):
             return None
         v = v.strip().lower().replace("-", ":")
         if not re.fullmatch(r"([0-9a-f]{2}:){5}[0-9a-f]{2}", v):
-            raise ValueError("MAC non valido (formato aa:bb:cc:dd:ee:ff)")
+            raise ValueError("Invalid MAC (format aa:bb:cc:dd:ee:ff)")
         if int(v[:2], 16) & 1:
-            raise ValueError("Il primo MAC non può essere multicast (primo byte dispari)")
+            raise ValueError("The first MAC cannot be multicast (odd first byte)")
         return v
 
     @field_validator("ports")
@@ -241,13 +241,13 @@ class Node(BaseModel):
             if mode == "access":
                 vid = int(cfg.get("vlan", 1))
                 if not 1 <= vid <= 4094:
-                    raise ValueError(f"{port}: VLAN {vid} fuori da 1-4094")
+                    raise ValueError(f"{port}: VLAN {vid} out of range 1-4094")
             elif mode == "trunk":
                 parse_vlans(str(cfg.get("vlans", "1-4094")))
                 if not 1 <= int(cfg.get("native", 1)) <= 4094:
-                    raise ValueError(f"{port}: VLAN nativa fuori da 1-4094")
+                    raise ValueError(f"{port}: native VLAN out of range 1-4094")
             else:
-                raise ValueError(f"{port}: modo '{mode}' sconosciuto (access o trunk)")
+                raise ValueError(f"{port}: unknown mode '{mode}' (access or trunk)")
         return v
 
     @field_validator("remote")
@@ -262,7 +262,7 @@ class Node(BaseModel):
     @classmethod
     def _vni(cls, v: int | None) -> int | None:
         if v is not None and not 1 <= v <= 16777215:
-            raise ValueError("VNI tra 1 e 16777215")
+            raise ValueError("VNI between 1 and 16777215")
         return v
 
     @field_validator("mgmt_ip")
@@ -281,14 +281,14 @@ class Node(BaseModel):
         import ipaddress
         net = ipaddress.ip_network(v, strict=False)
         if net.version != 4 or net.prefixlen > 29:
-            raise ValueError("Subnet NAT: IPv4 con prefisso fino a /29 (es. 10.99.0.0/24)")
+            raise ValueError("NAT subnet: IPv4 with prefix up to /29 (e.g. 10.99.0.0/24)")
         return str(net)
 
     @field_validator("size")
     @classmethod
     def _size(cls, v: int | None) -> int | None:
         if v is not None and not (40 <= v <= 300):
-            raise ValueError("Dimensione icona tra 40% e 300%")
+            raise ValueError("Icon size between 40% and 300%")
         return v
 
 
@@ -299,7 +299,7 @@ class Endpoint(BaseModel):
     @classmethod
     def parse(cls, raw: str) -> "Endpoint":
         if ":" not in raw:
-            raise ValueError(f"Endpoint '{raw}' non valido: usa il formato nodo:interfaccia")
+            raise ValueError(f"Endpoint '{raw}' invalid: use the format node:interface")
         node, iface = raw.split(":", 1)
         return cls(node=node.strip(), iface=iface.strip())
 
@@ -327,7 +327,7 @@ class Link(BaseModel):
     @classmethod
     def _two(cls, v: list[str]) -> list[str]:
         if len(v) != 2:
-            raise ValueError("Ogni link deve avere esattamente 2 endpoint (per più nodi usa un nodo 'bridge')")
+            raise ValueError("Each link must have exactly 2 endpoints (for more nodes use a 'bridge' node)")
         for e in v:
             Endpoint.parse(e)
         return v
@@ -336,21 +336,21 @@ class Link(BaseModel):
     @classmethod
     def _loss(cls, v: float | None) -> float | None:
         if v is not None and not (0 <= v <= 100):
-            raise ValueError("loss_pct deve essere tra 0 e 100")
+            raise ValueError("loss_pct must be between 0 and 100")
         return v
 
     @field_validator("color")
     @classmethod
     def _color(cls, v: str | None) -> str | None:
         if v is not None and not re.fullmatch(r"#[0-9a-fA-F]{6}", v):
-            raise ValueError("colore del link non valido (usa #rrggbb)")
+            raise ValueError("invalid link color (use #rrggbb)")
         return v
 
     @field_validator("width")
     @classmethod
     def _width(cls, v: int | None) -> int | None:
         if v is not None and not (1 <= v <= 8):
-            raise ValueError("spessore del link tra 1 e 8")
+            raise ValueError("link width between 1 and 8")
         return v
 
     @field_validator("label")
@@ -358,14 +358,14 @@ class Link(BaseModel):
     def _label(cls, v: str | None) -> str | None:
         v = (v or "").strip()
         if len(v) > 40:
-            raise ValueError("etichetta del link: massimo 40 caratteri")
+            raise ValueError("link label: maximum 40 characters")
         return v or None
 
     @field_validator("delay_ms", "jitter_ms", "rate_kbit")
     @classmethod
     def _positive(cls, v: float | None) -> float | None:
         if v is not None and v < 0:
-            raise ValueError("i parametri del link non possono essere negativi")
+            raise ValueError("link parameters cannot be negative")
         return v
 
     @property
@@ -412,7 +412,7 @@ class Annotation(BaseModel):
     @classmethod
     def _img(cls, v: str | None) -> str | None:
         if v and (not v.startswith("data:image/") or len(v) > 3_000_000):
-            raise ValueError("Immagine non valida o troppo grande (max ~2 MB)")
+            raise ValueError("Invalid or too large image (max ~2 MB)")
         return v
 
 
@@ -436,14 +436,14 @@ class Lab(BaseModel):
     @field_validator("config_set")
     @classmethod
     def _set(cls, v: str) -> str:
-        return _check_name(v, "Nome config set")
+        return _check_name(v, "Config set name")
 
     @model_validator(mode="after")
     def _unique(self) -> "Lab":
         seen: set[str] = set()
         for n in self.nodes:
             if n.name in seen:
-                raise ValueError(f"Nodo duplicato: {n.name}")
+                raise ValueError(f"Duplicate node: {n.name}")
             seen.add(n.name)
         return self
 

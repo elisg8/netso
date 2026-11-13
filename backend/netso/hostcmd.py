@@ -31,7 +31,7 @@ class Runner:
         proc = subprocess.run(cmd, capture_output=capture, text=True)
         if check and proc.returncode != 0:
             msg = (proc.stderr or proc.stdout or "").strip()
-            raise HostError(f"Comando fallito ({proc.returncode}): {line}\n{msg}")
+            raise HostError(f"Command failed ({proc.returncode}): {line}\n{msg}")
         return (proc.stdout or "").strip()
 
     def write(self, path: str | Path, value: str) -> None:

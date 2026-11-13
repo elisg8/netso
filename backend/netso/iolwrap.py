@@ -142,7 +142,7 @@ def main(argv: list[str] | None = None) -> int:
             tty.setraw(0)
             os.execve(a.bin, iol_args(a.bin, a.id, a.ram, a.eth, a.config), env)
         except OSError as exc:
-            os.write(1, f"\r\nNetSO: impossibile avviare IOL: {exc}\r\n".encode())
+            os.write(1, f"\r\nNetSO: unable to start IOL: {exc}\r\n".encode())
         os._exit(127)
 
     def bye(*_):

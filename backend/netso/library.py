@@ -49,10 +49,10 @@ def check_path(path: str | None) -> str:
         return ""
     parts = [p.strip() for p in path.split("/")]
     if len(parts) > MAX_DEPTH:
-        raise LibraryError(f"Al massimo {MAX_DEPTH} livelli di cartelle")
+        raise LibraryError(f"At most {MAX_DEPTH} folder levels")
     for p in parts:
         if not _SEG.match(p) or p in (".", ".."):
-            raise LibraryError(f"Nome cartella non valido: '{p}' (lettere, numeri, spazio, _ . -)")
+            raise LibraryError(f"Invalid folder name: '{p}' (letters, numbers, space, _ . -)")
     return "/".join(parts)
 
 
@@ -79,11 +79,11 @@ def folder_map() -> dict[str, str]:
 def create_folder(path: str) -> str:
     path = check_path(path)
     if not path:
-        raise LibraryError("Nome cartella mancante")
+        raise LibraryError("Missing folder name")
     with _lock:
         data = _load()
         if path in data["folders"]:
-            raise LibraryError(f"La cartella '{path}' esiste già")
+            raise LibraryError(f"The folder '{path}' already exists")
         # create missing parents too
         p = path
         while p:
@@ -96,15 +96,15 @@ def create_folder(path: str) -> str:
 def rename_folder(path: str, new: str) -> str:
     path, new = check_path(path), check_path(new)
     if not path or not new:
-        raise LibraryError("Nome cartella mancante")
+        raise LibraryError("Missing folder name")
     with _lock:
         data = _load()
         if path not in data["folders"]:
-            raise LibraryError(f"Cartella '{path}' inesistente")
+            raise LibraryError(f"Folder '{path}' does not exist")
         if new != path and new in data["folders"]:
-            raise LibraryError(f"La cartella '{new}' esiste già")
+            raise LibraryError(f"The folder '{new}' already exists")
         if _inside(new, path) and new != path:
-            raise LibraryError("Non puoi spostare una cartella dentro se stessa")
+            raise LibraryError("You cannot move a folder inside itself")
         move = lambda p: new + p[len(path):] if _inside(p, path) else p  # noqa: E731
         data["folders"] = [move(f) for f in data["folders"]]
         p = _parent(new)
@@ -121,10 +121,10 @@ def delete_folder(path: str, existing_labs: list[str]) -> None:
     with _lock:
         data = _load()
         if path not in data["folders"]:
-            raise LibraryError(f"Cartella '{path}' inesistente")
+            raise LibraryError(f"Folder '{path}' does not exist")
         inside = [lab for lab, f in data["labs"].items() if lab in existing_labs and _inside(f, path)]
         if inside:
-            raise LibraryError(f"La cartella contiene {len(inside)} lab: spostali o eliminali prima")
+            raise LibraryError(f"The folder contains {len(inside)} labs: move or delete them first")
         data["folders"] = [f for f in data["folders"] if not _inside(f, path)]
         data["labs"] = {lab: f for lab, f in data["labs"].items() if not _inside(f, path)}
         _save(data)
@@ -135,7 +135,7 @@ def set_lab_folder(lab: str, folder: str) -> str:
     with _lock:
         data = _load()
         if folder and folder not in data["folders"]:
-            raise LibraryError(f"Cartella '{folder}' inesistente")
+            raise LibraryError(f"Folder '{folder}' does not exist")
         if folder:
             data["labs"][lab] = folder
         else:

@@ -171,7 +171,7 @@ class Engine:
                     if not ns.iol_id or ns.iol_id in used:
                         ns.iol_id = next((i for i in IOL_IDS if i not in used), None)
                         if ns.iol_id is None:
-                            raise EngineError("Troppi nodi IOL accesi (massimo 511)")
+                            raise EngineError("Too many IOL nodes running (maximum 511)")
                 elif ns.vnc_display is None or not _port_free(5900 + ns.vnc_display):
                     ns.vnc_display = allocate_display(displays)
             if rn.kind == "iol":
@@ -209,7 +209,7 @@ class Engine:
         elif rn.kind == "external":
             ns.bridge = rn.host_bridge
             if not self.r.dry_run and not net.iface_exists(self.r, ns.bridge or ""):
-                raise EngineError(f"Il bridge host '{ns.bridge}' non esiste (nodo {rn.name})")
+                raise EngineError(f"Host bridge '{ns.bridge}' does not exist (node {rn.name})")
         ns.status = "running"
 
     def _host_iface(self, ns: NodeState, iface: str) -> str | None:
@@ -245,7 +245,7 @@ class Engine:
             net.plug_veth_into_container(self.r, host, ns.pid, ep.iface, br)
             ns.veths[ep.iface] = host
         else:
-            raise EngineError(f"Impossibile collegare a caldo {ep.node}:{ep.iface} (interfaccia non pronta)")
+            raise EngineError(f"Cannot hot-connect {ep.node}:{ep.iface} (interface not ready)")
 
     def _detach_endpoint(self, resolved: dict[str, ResolvedNode], ns: NodeState, ep) -> None:
         rn = resolved[ep.node]
@@ -268,9 +268,9 @@ class Engine:
             a, b = link.parsed()
             for ep in (a, b):
                 if not any(n.name == ep.node for n in lab.nodes):
-                    raise EngineError(f"Nodo '{ep.node}' inesistente")
+                    raise EngineError(f"Node '{ep.node}' does not exist")
                 if any(str(ep) in l.endpoints for l in lab.links):
-                    raise EngineError(f"{ep.node}:{ep.iface} è già collegata")
+                    raise EngineError(f"{ep.node}:{ep.iface} is already connected")
             state = load_state(name)
             if state.status == "running":
                 ctx_lab, resolved, _owned, _wiring = self._context(name)
@@ -298,7 +298,7 @@ class Engine:
         with _locks[name]:
             lab = topo.load_lab(name)
             if not 0 <= index < len(lab.links):
-                raise EngineError("Collegamento inesistente")
+                raise EngineError("Link does not exist")
             link = lab.links[index]
             state = load_state(name)
             if state.status == "running":
@@ -321,10 +321,10 @@ class Engine:
         """Host interface to sniff for a node's link endpoint; the node must be running."""
         ns = load_state(name).nodes.get(node)
         if ns is None or ns.status != "running":
-            raise EngineError(f"Il nodo '{node}' non è in esecuzione")
+            raise EngineError(f"Node '{node}' is not running")
         host = self._host_iface(ns, iface)
         if not host:
-            raise EngineError(f"Nessuna interfaccia da catturare per {node}:{iface} (collegata?)")
+            raise EngineError(f"No interface to capture for {node}:{iface} (connected?)")
         return host
 
     def _apply_impairments(self, lab: Lab, state: LabState) -> None:
@@ -391,7 +391,7 @@ class Engine:
             lab, resolved, owned, wiring = self._context(name)
             state = load_state(name)
             if state.status in ("running", "deploying"):
-                raise EngineError(f"Il lab '{name}' è già avviato: fai prima destroy")
+                raise EngineError(f"Lab '{name}' is already running: destroy it first")
             state.status = "deploying"
             state.error = None
             state.link_bridges = owned
@@ -461,7 +461,7 @@ class Engine:
         with _locks[name]:
             lab, resolved, owned, wiring = self._context(name)
             if node not in resolved:
-                raise EngineError(f"Nodo '{node}' inesistente")
+                raise EngineError(f"Node '{node}' does not exist")
             state = load_state(name)
             self._ensure_bridges(owned)
             state.link_bridges = sorted(set(state.link_bridges) | set(owned))
@@ -482,7 +482,7 @@ class Engine:
                 state.status = "running"
             save_state(name, state)
             if ns.status == "error":
-                raise EngineError(ns.error or "errore")
+                raise EngineError(ns.error or "error")
             return ns
 
     def stop_node(self, name: str, node: str) -> NodeState:
@@ -490,7 +490,7 @@ class Engine:
             state = load_state(name)
             ns = state.nodes.get(node)
             if ns is None:
-                raise EngineError(f"Nodo '{node}' non avviato")
+                raise EngineError(f"Node '{node}' not started")
             self.captures.stop_where(name, node)
             self.wireshark.stop_where(name, node)
             self._stop_node(ns)
@@ -513,7 +513,7 @@ class Engine:
             state = load_state(name)
             ns = state.nodes.get(node)
             if ns and ns.status == "running":
-                raise EngineError("Ferma il nodo prima di azzerarlo")
+                raise EngineError("Stop the node before wiping it")
             self.qemu.wipe(name, node)
             self.dynamips.wipe(name, node)
             self.iol.wipe(name, node)
@@ -571,14 +571,14 @@ class Engine:
     def guest_ip(self, name: str, node: str) -> str:
         ns = load_state(name).nodes.get(node)
         if ns is None or ns.status != "running":
-            raise EngineError("Il nodo non è in esecuzione")
+            raise EngineError("The node is not running")
         return _guest_ip(name, node, ns)
 
     def console_command(self, name: str, node: str) -> list[str]:
         state = load_state(name)
         ns = state.nodes.get(node)
         if ns is None or ns.status != "running":
-            raise EngineError("Il nodo non è in esecuzione")
+            raise EngineError("The node is not running")
         if ns.kind == "docker":
             shell = None
             try:
@@ -595,7 +595,7 @@ class Engine:
             # PuTTY-like: ask the user name, then ssh to the guest's management address
             return ["sh", "-c", 'printf "login as: "; read u; exec ssh -o StrictHostKeyChecking=no '
                     '-o UserKnownHostsFile=/dev/null -l "$u" "$0"', ip]
-        raise EngineError("Questo nodo non ha una consolle testuale (usa VNC)")
+        raise EngineError("This node has no text console (use VNC)")
 
 
 GUEST_PORTS = {"rdp": 3389, "rdp-tls": 3389, "ssh": 22, "http": 80, "https": 443, "winbox": 8291}
@@ -609,8 +609,8 @@ def _guest_ip(lab: str, node: str, ns: NodeState) -> str:
         except Exception:
             ip = None
     if not ip:
-        raise EngineError(f"{node}: per questa consolle serve l'IP di gestione del nodo (Modifica nodo → Gestione: "
-                          "IP e interfaccia collegata alla rete di gestione)")
+        raise EngineError(f"{node}: this console needs the node's management IP (Edit node → Management: "
+                          "IP and interface connected to the management network)")
     return ip
 
 

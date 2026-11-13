@@ -141,7 +141,7 @@ def _guide(name: str, topic: str, devs: dict, routers: list[str], bridges: list[
 def convert(name: str, text: str, templates: dict[str, Template], router: str = "cisco-iosv",
             topic: str = "") -> tuple[Lab, dict[str, str], str]:
     if router not in templates:
-        raise ValueError(f"Il router '{router}' non è installato")
+        raise ValueError(f"The router '{router}' is not installed")
     rtpl = templates[router]
     prefix, start = rtpl.iface_prefix, rtpl.iface_start
 

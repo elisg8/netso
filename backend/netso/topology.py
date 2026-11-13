@@ -37,7 +37,7 @@ def load_templates() -> dict[str, Template]:
 def resolve_node(node: Node, templates: dict[str, Template]) -> ResolvedNode:
     tpl = templates.get(node.template)
     if tpl is None:
-        raise TopologyError(f"Nodo {node.name}: template '{node.template}' inesistente")
+        raise TopologyError(f"Node {node.name}: template '{node.template}' does not exist")
     nics = node.nics if node.nics is not None else tpl.nics
     return ResolvedNode(
         name=node.name,
@@ -87,38 +87,38 @@ def validate_lab(lab: Lab, templates: dict[str, Template] | None = None) -> dict
     for i, link in enumerate(lab.links, 1):
         a, b = link.parsed()
         if a.node == b.node:
-            raise TopologyError(f"Link {i}: un nodo non può essere collegato a se stesso ({a.node})")
+            raise TopologyError(f"Link {i}: a node cannot be connected to itself ({a.node})")
         for ep in (a, b):
             rn = resolved.get(ep.node)
             if rn is None:
-                raise TopologyError(f"Link {i}: nodo '{ep.node}' inesistente")
+                raise TopologyError(f"Link {i}: node '{ep.node}' does not exist")
             if rn.kind in SHARED_KINDS:
                 continue  # any number of links, port name is cosmetic
             if ep.iface not in rn.interfaces:
                 raise TopologyError(
-                    f"Link {i}: interfaccia '{ep.iface}' non disponibile su {ep.node} "
-                    f"(disponibili: {', '.join(rn.interfaces)})"
+                    f"Link {i}: interface '{ep.iface}' not available on {ep.node} "
+                    f"(available: {', '.join(rn.interfaces)})"
                 )
             key = str(ep)
             if key in used:
-                raise TopologyError(f"Interfaccia {key} usata in due link")
+                raise TopologyError(f"Interface {key} used in two links")
             used[key] = key
         kinds = {resolved[a.node].kind, resolved[b.node].kind}
         if kinds <= set(SHARED_KINDS):
-            raise TopologyError(f"Link {i}: non si possono collegare tra loro due switch/reti (bridge, external, NAT)")
+            raise TopologyError(f"Link {i}: cannot connect two switches/networks together (bridge, external, NAT)")
     linked = {(e.node, e.iface) for link in lab.links for e in link.parsed()}
     for rn in resolved.values():
         if rn.mgmt_iface and rn.mgmt_iface not in rn.interfaces:
-            raise TopologyError(f"Nodo {rn.name}: interfaccia di gestione '{rn.mgmt_iface}' inesistente")
+            raise TopologyError(f"Node {rn.name}: management interface '{rn.mgmt_iface}' does not exist")
         if rn.mgmt_iface and (rn.name, rn.mgmt_iface) in linked:
-            raise TopologyError(f"Nodo {rn.name}: l'interfaccia di gestione {rn.mgmt_iface} è già usata da un collegamento")
+            raise TopologyError(f"Node {rn.name}: management interface {rn.mgmt_iface} is already used by a link")
     for rn in resolved.values():
         if rn.kind == "vxlan" and not (rn.remote and rn.vni):
-            raise TopologyError(f"Nodo {rn.name}: il collegamento remoto (VXLAN) richiede IP del server remoto e VNI")
+            raise TopologyError(f"Node {rn.name}: the remote link (VXLAN) requires the remote server IP and VNI")
         if rn.kind == "external" and not rn.host_bridge:
-            raise TopologyError(f"Nodo {rn.name}: i nodi external richiedono 'host_bridge'")
+            raise TopologyError(f"Node {rn.name}: external nodes require 'host_bridge'")
         if rn.kind in ("qemu", "docker", "dynamips", "iol") and not rn.image:
-            raise TopologyError(f"Nodo {rn.name}: nessuna immagine definita")
+            raise TopologyError(f"Node {rn.name}: no image defined")
     return resolved
 
 
@@ -136,9 +136,9 @@ def parse_lab_yaml(text: str) -> Lab:
     try:
         data = yaml.safe_load(text) or {}
     except yaml.YAMLError as exc:
-        raise TopologyError(f"YAML non valido: {exc}") from exc
+        raise TopologyError(f"Invalid YAML: {exc}") from exc
     if not isinstance(data, dict):
-        raise TopologyError("Il file del lab deve essere un oggetto YAML")
+        raise TopologyError("The lab file must be a YAML object")
     try:
         return Lab(**data)
     except Exception as exc:
@@ -175,7 +175,7 @@ def list_labs() -> list[str]:
 def load_lab(name: str) -> Lab:
     f = lab_file(name)
     if not f.exists():
-        raise FileNotFoundError(f"Lab '{name}' inesistente")
+        raise FileNotFoundError(f"Lab '{name}' does not exist")
     return parse_lab_yaml(f.read_text())
 
 
@@ -199,7 +199,7 @@ DEFAULT_SET = "default"
 
 def _check_set(name: str) -> str:
     if not NAME_RE.match(name):
-        raise TopologyError(f"Nome config set '{name}' non valido")
+        raise TopologyError(f"Invalid config set name '{name}'")
     return name
 
 
@@ -228,7 +228,7 @@ def read_config(lab: str, cfg_set: str, node: str) -> str | None:
 
 def write_config(lab: str, cfg_set: str, node: str, text: str) -> None:
     if not NODE_NAME_RE.match(node):
-        raise TopologyError(f"Nome nodo '{node}' non valido")
+        raise TopologyError(f"Invalid node name '{node}'")
     f = configs_dir(lab, cfg_set) / f"{node}.cfg"
     if not text.strip():
         f.unlink(missing_ok=True)
@@ -239,7 +239,7 @@ def write_config(lab: str, cfg_set: str, node: str, text: str) -> None:
 
 def create_config_set(lab: str, name: str, copy_from: str | None = None) -> None:
     if name in config_sets(lab):
-        raise TopologyError(f"Il config set '{name}' esiste già")
+        raise TopologyError(f"Config set '{name}' already exists")
     d = configs_dir(lab, name)
     if copy_from and configs_dir(lab, copy_from).is_dir():
         shutil.copytree(configs_dir(lab, copy_from), d)
@@ -249,17 +249,17 @@ def create_config_set(lab: str, name: str, copy_from: str | None = None) -> None
 
 def rename_config_set(lab: str, old: str, new: str) -> None:
     if old == DEFAULT_SET:
-        raise TopologyError("Il config set 'default' non si può rinominare")
+        raise TopologyError("The 'default' config set cannot be renamed")
     if new in config_sets(lab):
-        raise TopologyError(f"Il config set '{new}' esiste già")
+        raise TopologyError(f"Config set '{new}' already exists")
     if not configs_dir(lab, old).is_dir():
-        raise FileNotFoundError(f"Config set '{old}' inesistente")
+        raise FileNotFoundError(f"Config set '{old}' does not exist")
     configs_dir(lab, old).rename(configs_dir(lab, new))
 
 
 def delete_config_set(lab: str, name: str) -> None:
     if name == DEFAULT_SET:
-        raise TopologyError("Il config set 'default' non si può eliminare")
+        raise TopologyError("The 'default' config set cannot be deleted")
     shutil.rmtree(configs_dir(lab, name), ignore_errors=True)
 
 

@@ -29,7 +29,7 @@ def root() -> Path:
 def check_name(name: str) -> str:
     name = (name or "").strip()
     if "/" in name or ".." in name or not _NAME.match(name):
-        raise IconError("Nome icona non valido (lettere, numeri, spazio e . _ -, max 48)")
+        raise IconError("Invalid icon name (letters, numbers, space and . _ -, max 48)")
     return name
 
 
@@ -61,7 +61,7 @@ def media_type(p: Path) -> str:
 def path(name: str) -> Path:
     p = _find(name)
     if not p:
-        raise FileNotFoundError(f"Icona '{name}' inesistente")
+        raise FileNotFoundError(f"Icon '{name}' does not exist")
     return p
 
 
@@ -69,13 +69,13 @@ def save(name: str, filename: str, data: bytes) -> dict:
     name = check_name(name)
     ext = Path(filename or "").suffix.lower()
     if ext not in ALLOWED:
-        raise IconError(f"Formato non supportato: usa {', '.join(sorted(ALLOWED))}")
+        raise IconError(f"Unsupported format: use {', '.join(sorted(ALLOWED))}")
     if not data:
-        raise IconError("File vuoto")
+        raise IconError("Empty file")
     if len(data) > MAX_BYTES:
-        raise IconError("Icona troppo grande (max 2 MB)")
+        raise IconError("Icon too large (max 2 MB)")
     if ext == ".svg" and b"<script" in data.lower():  # served via <img> (no script run), but refuse it anyway
-        raise IconError("SVG con <script> non ammesso")
+        raise IconError("SVG with <script> is not allowed")
     d = root()
     d.mkdir(parents=True, exist_ok=True)
     for other in ALLOWED:  # one file per name: drop a previous upload with another extension
@@ -87,5 +87,5 @@ def save(name: str, filename: str, data: bytes) -> dict:
 def delete(name: str) -> None:
     p = _find(name)
     if not p:
-        raise FileNotFoundError(f"Icona '{name}' inesistente")
+        raise FileNotFoundError(f"Icon '{name}' does not exist")
     p.unlink(missing_ok=True)

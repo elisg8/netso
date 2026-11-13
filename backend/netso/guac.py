@@ -45,7 +45,7 @@ def split(buf: str) -> tuple[list[list[str]], list[str], str]:
             if buf[end] == ";":
                 break
             if buf[end] != ",":
-                raise ValueError("istruzione Guacamole non valida")
+                raise ValueError("invalid Guacamole instruction")
         parsed.append(elems)
         raw.append(buf[start:j])
         start = j
@@ -105,14 +105,14 @@ async def handshake(reader: asyncio.StreamReader, writer: asyncio.StreamWriter, 
     while True:
         data = await asyncio.wait_for(reader.read(65536), 15)
         if not data:
-            raise ConnectionError("guacd ha chiuso la connessione")
+            raise ConnectionError("guacd closed the connection")
         buf += dec.decode(data)
         parsed, _, rest = split(buf)
         if parsed:
             break
     args = parsed[0]
     if args[0] == "error":
-        raise ConnectionError(f"guacd: {args[1] if len(args) > 1 else 'errore'}")
+        raise ConnectionError(f"guacd: {args[1] if len(args) > 1 else 'error'}")
     names = args[1:]
     values = [n if n.startswith("VERSION_") else params.get(n, "") for n in names]
     out = (encode("size", width, height, 96) + encode("audio") + encode("video")

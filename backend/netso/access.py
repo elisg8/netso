@@ -104,11 +104,11 @@ def check(path: str, method: str, user: str, role: str) -> str | None:
     if role == "admin":
         return None
     if path.startswith("/api/users"):
-        return "Solo un amministratore gestisce gli utenti" if write else None
+        return "Only an administrator can manage users" if write else None
     if path.startswith(ADMIN_ONLY) and write:
-        return "Solo un amministratore può cambiare dispositivi, immagini e server"
+        return "Only an administrator can change devices, images and servers"
     if write and (path in ("/api/labs", "/api/labs/generate", "/api/import", "/api/import/preview") or path.startswith("/api/folders")):
-        return "Il tuo utente è in sola lettura" if role == "viewer" else None
+        return "Your user is read-only" if role == "viewer" else None
     m = _LAB.match(path)
     if not m:
         return None
@@ -123,5 +123,5 @@ def check(path: str, method: str, user: str, role: str) -> str | None:
     if have >= LEVELS[need]:
         return None
     if have == 0:
-        return "Lab non condiviso con te"
-    return "Serve il permesso di modifica su questo lab" if need == "edit" else "Solo il proprietario può farlo"
+        return "Lab not shared with you"
+    return "You need edit permission on this lab" if need == "edit" else "Only the owner can do this"

@@ -25,7 +25,7 @@ def snap_root(lab: str):
 
 def _dir(lab: str, name: str):
     if not NAME_RE.match(name):
-        raise SnapshotError("Nome istantanea non valido (lettere, numeri, _ e -, max 32)")
+        raise SnapshotError("Invalid snapshot name (letters, numbers, _ and -, max 32)")
     return snap_root(lab) / name
 
 
@@ -47,13 +47,13 @@ def list_snapshots(lab: str) -> list[dict]:
 
 def _require_stopped(running: list[str]) -> None:
     if running:
-        raise SnapshotError(f"Ferma prima le VM accese ({', '.join(running)}): i dischi si fotografano a macchina spenta")
+        raise SnapshotError(f"Stop the running VMs first ({', '.join(running)}): disks are snapshotted while the machine is powered off")
 
 
 def create(r: Runner, lab: str, name: str, description: str, running_vms: list[str]) -> dict:
     d = _dir(lab, name)
     if d.exists():
-        raise SnapshotError(f"Esiste già un'istantanea '{name}'")
+        raise SnapshotError(f"A snapshot '{name}' already exists")
     _require_stopped(running_vms)
     d.mkdir(parents=True)
     shutil.copy2(topo.lab_file(lab), d / "lab.yml")
@@ -72,7 +72,7 @@ def create(r: Runner, lab: str, name: str, description: str, running_vms: list[s
 def restore(r: Runner, lab: str, name: str, running_vms: list[str]) -> dict:
     d = _dir(lab, name)
     if not (d / "meta.json").exists():
-        raise SnapshotError(f"Istantanea '{name}' inesistente")
+        raise SnapshotError(f"Snapshot '{name}' does not exist")
     _require_stopped(running_vms)
     meta = json.loads((d / "meta.json").read_text())
     shutil.copy2(d / "lab.yml", topo.lab_file(lab))
@@ -94,7 +94,7 @@ def restore(r: Runner, lab: str, name: str, running_vms: list[str]) -> dict:
 def delete(r: Runner, lab: str, name: str) -> None:
     d = _dir(lab, name)
     if not d.exists():
-        raise SnapshotError(f"Istantanea '{name}' inesistente")
+        raise SnapshotError(f"Snapshot '{name}' does not exist")
     for ov in _overlays(lab):
         r.run(["qemu-img", "snapshot", "-d", f"netso-{name}", str(ov)], check=False)
     shutil.rmtree(d, ignore_errors=True)

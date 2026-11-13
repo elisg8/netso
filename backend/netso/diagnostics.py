@@ -47,32 +47,32 @@ def run(lab_name: str, node_name: str, command: str, timeout: int = 15) -> str:
     """Run one read-only command on a running Docker node and return its output (raises DiagError)."""
     command = (command or "").strip()
     if not is_readonly(command):
-        raise DiagError(f"Comando non di sola lettura, rifiutato: «{command}»")
+        raise DiagError(f"Command is not read-only, rejected: «{command}»")
     lab = topo.load_lab(lab_name)
     node = next((x for x in lab.nodes if x.name == node_name), None)
     if node is None:
-        raise DiagError(f"Nodo «{node_name}» inesistente nel lab")
+        raise DiagError(f"Node «{node_name}» does not exist in the lab")
     tpl = topo.load_templates().get(node.template)
     state = engine.refresh(lab_name)
     ns = state.nodes.get(node_name)
     if not ns or ns.status != "running":
-        raise DiagError(f"Il nodo «{node_name}» è spento: accendilo per la diagnostica live")
+        raise DiagError(f"Node «{node_name}» is powered off: power it on for live diagnostics")
     # Docker nodes (FRR…): run through the container's CLI
     if tpl and tpl.kind == "docker" and ns.container:
         argv = ["vtysh", "-c", command] if command.lower().startswith("show ") else shlex.split(command)
         out = engine.r.run(["docker", "exec", ns.container, *argv], check=False,
-                           fake=f"(dry-run) nessun nodo reale: «{command}» non eseguito")
-        return (out or "").strip() or "(nessun output)"
+                           fake=f"(dry-run) no real node: «{command}» not executed")
+        return (out or "").strip() or "(no output)"
     # VM / Cisco IOL / Dynamips: type the command on the serial console (telnet), like saving the config
     if tpl and tpl.kind in ("qemu", "iol", "dynamips") and ns.console_port:
         if engine.r.dry_run:
-            return f"(dry-run) consolle :{ns.console_port} <- «{command}» non eseguito"
+            return f"(dry-run) console :{ns.console_port} <- «{command}» not executed"
         try:  # «terminal length 0» first so long outputs don't page; enable mode for «show running-config»
             text = savecfg.console_config("127.0.0.1", ns.console_port, ["terminal length 0", command], enable=True)
         except savecfg.SaveError as exc:
             raise DiagError(str(exc)) from exc
-        return text.strip() or "(nessun output)"
-    raise DiagError(f"Diagnostica live non disponibile su «{node_name}»: nessuna consolle (serve un nodo FRR, o una VM/IOL/Dynamips con consolle telnet)")
+        return text.strip() or "(no output)"
+    raise DiagError(f"Live diagnostics not available on «{node_name}»: no console (requires an FRR node, or a VM/IOL/Dynamips with a telnet console)")
 
 
 def apply_config(lab_name: str, node_name: str, lines: list[str], timeout: int = 60) -> str:
@@ -82,27 +82,27 @@ def apply_config(lab_name: str, node_name: str, lines: list[str], timeout: int =
     """
     lines = [ln.rstrip() for ln in (lines or []) if ln and ln.strip()]
     if not lines:
-        raise DiagError("Nessuna riga di configurazione da applicare")
+        raise DiagError("No configuration lines to apply")
     for ln in lines:
         if "\n" in ln or "\r" in ln:
-            raise DiagError("Riga di configurazione non valida (ritorno a capo nel testo)")
+            raise DiagError("Invalid configuration line (line break in the text)")
     lab = topo.load_lab(lab_name)
     node = next((x for x in lab.nodes if x.name == node_name), None)
     if node is None:
-        raise DiagError(f"Nodo «{node_name}» inesistente nel lab")
+        raise DiagError(f"Node «{node_name}» does not exist in the lab")
     tpl = topo.load_templates().get(node.template)
     state = engine.refresh(lab_name)
     ns = state.nodes.get(node_name)
     if not ns or ns.status != "running":
-        raise DiagError(f"Il nodo «{node_name}» è spento: accendilo per configurarlo")
+        raise DiagError(f"Node «{node_name}» is powered off: power it on to configure it")
     # Docker nodes (FRR…): one vtysh session, enter config mode, apply every line
     if tpl and tpl.kind == "docker" and ns.container:
         argv = ["vtysh", "-c", "configure terminal"]
         for ln in lines:
             argv += ["-c", ln]
         out = engine.r.run(["docker", "exec", ns.container, *argv], check=False,
-                           fake=f"(dry-run) «{'; '.join(lines)}» non applicato su {node_name}")
-        return (out or "").strip() or "(configurazione applicata)"
+                           fake=f"(dry-run) «{'; '.join(lines)}» not applied on {node_name}")
+        return (out or "").strip() or "(configuration applied)"
     # VM / Cisco IOL / Dynamips: type the lines on the serial console, wrapped in «conf t … end»
     if tpl and tpl.kind in ("qemu", "iol", "dynamips") and ns.console_port:
         if engine.r.dry_run:
@@ -112,5 +112,5 @@ def apply_config(lab_name: str, node_name: str, lines: list[str], timeout: int =
                                           ["configure terminal", *lines, "end"], enable=True)
         except savecfg.SaveError as exc:
             raise DiagError(str(exc)) from exc
-        return text.strip() or "(configurazione applicata)"
-    raise DiagError(f"Configurazione non disponibile su «{node_name}»: nessuna consolle (serve un nodo FRR, o una VM/IOL/Dynamips con consolle telnet)")
+        return text.strip() or "(configuration applied)"
+    raise DiagError(f"Configuration not available on «{node_name}»: no console (requires an FRR node, or a VM/IOL/Dynamips with a telnet console)")

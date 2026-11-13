@@ -55,10 +55,10 @@ def save_template(t: Template, old_name: str | None = None) -> None:
     try:
         d.mkdir(parents=True, exist_ok=True)
     except OSError as exc:
-        raise CatalogError(f"Cartella dei template {d} non scrivibile: {exc.strerror}") from exc
+        raise CatalogError(f"Templates folder {d} not writable: {exc.strerror}") from exc
     if old_name and old_name != t.name:
         if t.name in topo.load_templates():
-            raise CatalogError(f"Esiste già un dispositivo '{t.name}'")
+            raise CatalogError(f"A device '{t.name}' already exists")
         user_file(old_name).unlink(missing_ok=True)
     user_file(t.name).write_text(dump_template(t))
 
@@ -66,9 +66,9 @@ def save_template(t: Template, old_name: str | None = None) -> None:
 def delete_template(name: str, in_use: list[str]) -> str:
     f = user_file(name)
     if not f.exists():
-        raise CatalogError("I dispositivi integrati non si possono eliminare (solo modificare)")
+        raise CatalogError("Built-in devices cannot be deleted (only modified)")
     if in_use and name not in builtin_names():
-        raise CatalogError(f"Usato nei lab: {', '.join(in_use[:5])}{'…' if len(in_use) > 5 else ''}")
+        raise CatalogError(f"Used in labs: {', '.join(in_use[:5])}{'…' if len(in_use) > 5 else ''}")
     f.unlink()
     return "ripristinato" if name in builtin_names() else "eliminato"
 
@@ -202,10 +202,10 @@ def parse_definitions(files: list[tuple[str, bytes]]) -> dict:
         try:
             doc = json.loads(text) if text.lstrip().startswith("{") else yaml.safe_load(text)
         except (ValueError, yaml.YAMLError) as exc:
-            warnings.append(f"{fname}: non leggibile ({exc})")
+            warnings.append(f"{fname}: not readable ({exc})")
             continue
         if not isinstance(doc, dict):
-            warnings.append(f"{fname}: formato non riconosciuto")
+            warnings.append(f"{fname}: unrecognized format")
         elif "appliance_id" in doc or ("registry_version" in doc and ("qemu" in doc or "docker" in doc)):
             apps.append(doc)
         elif "node_definition_id" in doc:
@@ -215,23 +215,23 @@ def parse_definitions(files: list[tuple[str, bytes]]) -> dict:
         elif "kind" in doc and "name" in doc:
             natives.append(doc)
         else:
-            warnings.append(f"{fname}: non è una node/image definition CML, un'appliance GNS3 o un template NetSO")
+            warnings.append(f"{fname}: not a CML node/image definition, a GNS3 appliance or a NetSO template")
     out = []
     for doc in docs_cml_nodes:
         t = cml_node_definition(doc, taken, docs_cml_images)
         if t:
             out.append(t)
         else:
-            warnings.append(f"{doc.get('id')}: tipo CML non necessario in NetSO (c'è già switch/rete esterna)")
+            warnings.append(f"{doc.get('id')}: CML type not needed in NetSO (switch/external network already exists)")
     for app in apps:
         t = gns3_appliance(app, taken)
         if t:
             out.append(t)
             if t.kind == "qemu" and t.image_files:
-                warnings.append(f"{t.name}: copia i dischi nella cartella immagine '{t.image}' (versioni: "
+                warnings.append(f"{t.name}: copy the disks into the image folder '{t.image}' (versions: "
                                 f"{', '.join(sorted({f['version'] for f in t.image_files if f.get('version')}))})")
         else:
-            warnings.append(f"{app.get('name')}: appliance senza sezione qemu/docker, ignorata")
+            warnings.append(f"{app.get('name')}: appliance without a qemu/docker section, ignored")
     for doc in natives:
         try:
             t = Template(**doc)
@@ -240,9 +240,9 @@ def parse_definitions(files: list[tuple[str, bytes]]) -> dict:
             taken.add(t.name)
             out.append(t)
         except Exception as exc:
-            warnings.append(f"{doc.get('name')}: template non valido ({exc})")
+            warnings.append(f"{doc.get('name')}: invalid template ({exc})")
     nodes = {d.get("id") for d in docs_cml_nodes}
     for img in docs_cml_images:
         if img.get("node_definition_id") not in nodes:
-            warnings.append(f"Image definition {img.get('id')}: importa anche la node definition '{img.get('node_definition_id')}'")
+            warnings.append(f"Image definition {img.get('id')}: also import the node definition '{img.get('node_definition_id')}'")
     return {"templates": out, "images": docs_cml_images, "warnings": warnings}

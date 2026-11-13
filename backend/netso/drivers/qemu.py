@@ -22,12 +22,12 @@ def base_disks(image: str) -> list[Path]:
         return [p]
     if not p.is_dir():
         raise FileNotFoundError(
-            f"Immagine '{image}' non trovata in {settings.images} "
-            f"(crea la cartella {p} e mettici dentro il disco .qcow2)"
+            f"Image '{image}' not found in {settings.images} "
+            f"(create the folder {p} and put the .qcow2 disk inside it)"
         )
     disks = sorted(f for f in p.iterdir() if f.suffix in DISK_SUFFIXES)
     if not disks:
-        raise FileNotFoundError(f"Nessun disco in {p}")
+        raise FileNotFoundError(f"No disk in {p}")
     return disks
 
 

@@ -88,16 +88,16 @@ def detect(filename: str, data: bytes) -> str:
     try:
         doc = yaml.safe_load(text)
     except yaml.YAMLError as exc:
-        raise ImportError_(f"File non riconosciuto: {exc}") from exc
+        raise ImportError_(f"Unrecognized file: {exc}") from exc
     if not isinstance(doc, dict):
-        raise ImportError_("File non riconosciuto")
+        raise ImportError_("Unrecognized file")
     if isinstance(doc.get("topology"), dict):
         return "clab"
     if isinstance(doc.get("lab"), dict) or ("nodes" in doc and "links" in doc and any(isinstance(n, dict) and "node_definition" in n for n in doc.get("nodes") or [])):
         return "cml"
     if isinstance(doc.get("nodes"), list):
         return "netso"
-    raise ImportError_("Formato non riconosciuto: attesi containerlab, CML, GNS3, EVE-NG/PNETLab o NetSO")
+    raise ImportError_("Unrecognized format: expected containerlab, CML, GNS3, EVE-NG/PNETLab or NetSO")
 
 
 def _num(v):
@@ -127,7 +127,7 @@ def parse_clab(text: str) -> Foreign:
         cfg = n.get("startup-config")
         # a single-line value that looks like a path is an external file; anything else is an embedded config
         if isinstance(cfg, str) and "\n" not in cfg.strip() and re.fullmatch(r"[\w./~-]+\.(cfg|conf|txt|partial|json|yml|yaml)|[\w.~-]*/[\w./-]+", cfg.strip()):
-            f.warnings.append(f"{name}: startup-config '{cfg}' è un file esterno, non incluso")
+            f.warnings.append(f"{name}: startup-config '{cfg}' is an external file, not included")
             cfg = None
         vm = kind.startswith("vr-") or kind.startswith(("cisco_c8000v", "cisco_csr", "cisco_vios", "fortinet", "generic_vm", "juniper_vmx"))
         f.nodes.append(FNode(name=str(name), hint=f"{kind} {image or ''}", container=not vm and kind not in ("bridge", "ovs-bridge", "host"),
@@ -136,7 +136,7 @@ def parse_clab(text: str) -> Foreign:
     for ln in topo.get("links") or []:
         eps = ln.get("endpoints")
         if not eps or len(eps) != 2:
-            f.warnings.append(f"Link non supportato (tipo {ln.get('type', '?')}) ignorato")
+            f.warnings.append(f"Unsupported link (type {ln.get('type', '?')}) ignored")
             continue
         pair = []
         for e in eps:
@@ -176,7 +176,7 @@ def parse_cml(text: str) -> Foreign:
         if a and b:
             f.links.append((a, b))
         else:
-            f.warnings.append(f"Link {ln.get('id', '?')} con interfacce sconosciute ignorato")
+            f.warnings.append(f"Link {ln.get('id', '?')} with unknown interfaces ignored")
     f.annotations = cml_annotations(doc.get("annotations"))
     return f
 
@@ -187,7 +187,7 @@ def parse_gns3(data: bytes) -> Foreign:
         with zipfile.ZipFile(io.BytesIO(data)) as z:
             names = [n for n in z.namelist() if n.endswith(".gns3")]
             if not names:
-                raise ImportError_("Nessun file .gns3 nel progetto")
+                raise ImportError_("No .gns3 file in the project")
             doc = json.loads(z.read(names[0]))
             for n in z.namelist():  # startup configs shipped in the project (vpcs, iou, dynamips)
                 if re.search(r"(startup-config\.cfg|startup\.vpc|_startup-config\.cfg)$", n):
@@ -212,7 +212,7 @@ def parse_gns3(data: bytes) -> Foreign:
                              cpus=_int(props.get("cpus")), ram=_int(props.get("ram")), nics=_int(props.get("adapters")),
                              config=configs.get(n.get("node_id")), description=f"GNS3 {nt}"))
         if nt == "iou":
-            f.warnings.append(f"{n.get('name')}: IOU/IOL gira come container vrnetlab: costruisci l'immagine con il tuo IOL")
+            f.warnings.append(f"{n.get('name')}: IOU/IOL runs as a vrnetlab container: build the image with your own IOL")
     for ln in topo.get("links") or []:
         ends = []
         for e in ln.get("nodes") or []:
@@ -232,7 +232,7 @@ def parse_unl(data: bytes) -> Foreign:
     try:
         root = ET.fromstring(data)
     except ET.ParseError as exc:
-        raise ImportError_(f"File .unl non valido: {exc}") from exc
+        raise ImportError_(f"Invalid .unl file: {exc}") from exc
     f = Foreign("unl", name=root.get("name") or "eve-lab", description=root.get("description") or "", author=root.get("author") or "")
     configs = {}
     for c in root.iter("config"):
@@ -249,7 +249,7 @@ def parse_unl(data: bytes) -> Foreign:
                              config=configs.get(n.get("id")),
                              description=f"EVE {tpl or typ}"))
         if typ == "iol":
-            f.warnings.append(f"{name}: IOL gira come container vrnetlab: costruisci l'immagine con il tuo IOL")
+            f.warnings.append(f"{name}: IOL runs as a vrnetlab container: build the image with your own IOL")
         for i in n.iter("interface"):
             if i.get("network_id") and i.get("network_id") != "0":
                 members.setdefault(i.get("network_id"), []).append((name, FIface(i.get("name") or "", _int(i.get("id")))))
@@ -269,9 +269,9 @@ def parse_unl(data: bytes) -> Foreign:
         for k, ep in enumerate(eps):
             f.links.append((ep, (bname, FIface(f"port{k + 1}", k))))
         if ext:
-            f.warnings.append(f"{bname}: rete esterna EVE '{ntype}' → controlla il bridge dell'host nel nodo")
+            f.warnings.append(f"{bname}: EVE external network '{ntype}' → check the host bridge in the node")
     if root.find(".//textobjects") is not None and len(root.find(".//textobjects")):
-        f.warnings.append("Testi e forme di EVE non sono ancora importati")
+        f.warnings.append("EVE texts and shapes are not imported yet")
     return f
 
 
@@ -442,7 +442,7 @@ def build(f: Foreign, templates: dict[str, Template], overrides: dict[str, str] 
         name = rename[fn.name]
         tpl_name = overrides.get(name) or guess_template(fn, templates)
         if tpl_name not in templates:
-            raise ImportError_(f"Template '{tpl_name}' inesistente")
+            raise ImportError_(f"Template '{tpl_name}' does not exist")
         tpl = templates[tpl_name]
         node = Node(name=name, template=tpl_name, description=fn.description)
         if id(fn) in auto:  # no position in the source: a simple grid
@@ -463,11 +463,11 @@ def build(f: Foreign, templates: dict[str, Template], overrides: dict[str, str] 
             configs[name] = fn.config
             node.startup_config = True
         elif fn.config:
-            warnings.append(f"{name}: la config importata non si può applicare al template {tpl_name}")
+            warnings.append(f"{name}: the imported config cannot be applied to template {tpl_name}")
         nodes[name] = node
         mapping.append({"name": name, "source": fn.hint.strip(), "template": tpl_name, "image": node.image})
         if name != fn.name:
-            warnings.append(f"'{fn.name}' rinominato in '{name}'")
+            warnings.append(f"'{fn.name}' renamed to '{name}'")
 
     used: dict[str, set[str]] = {n: set() for n in nodes}
 
@@ -498,12 +498,12 @@ def build(f: Foreign, templates: dict[str, Template], overrides: dict[str, str] 
     links = []
     for (an, ai), (bn, bi) in f.links:
         if an not in rename or bn not in rename:
-            warnings.append(f"Link {an}:{ai.name} – {bn}:{bi.name} verso un nodo sconosciuto ignorato")
+            warnings.append(f"Link {an}:{ai.name} – {bn}:{bi.name} to an unknown node ignored")
             continue
         a, b = rename[an], rename[bn]
         ia, ib = pick(a, ai), pick(b, bi)
         if not ia or not ib:
-            warnings.append(f"Link {a}:{ai.name} – {b}:{bi.name}: interfacce esaurite, ignorato")
+            warnings.append(f"Link {a}:{ai.name} – {b}:{bi.name}: interfaces exhausted, ignored")
             continue
         links.append(Link(endpoints=[f"{a}:{ia}", f"{b}:{ib}"]))
 
@@ -514,7 +514,7 @@ def build(f: Foreign, templates: dict[str, Template], overrides: dict[str, str] 
             try:
                 anns.append(Annotation(**a))
             except Exception:
-                warnings.append(f"Disegno {a.get('id')} non importabile")
+                warnings.append(f"Drawing {a.get('id')} cannot be imported")
         lab = Lab(name=_clean_name(name, set()), description=f.description[:500], author=f.author, nodes=list(nodes.values()),
                   links=links, annotations=anns)
     except Exception as exc:
@@ -538,9 +538,9 @@ def import_file(filename: str, data: bytes, templates: dict[str, Template], over
     except ImportError_:
         raise
     except Exception as exc:
-        raise ImportError_(f"Errore leggendo il file {FORMATS[fmt]}: {exc}") from exc
+        raise ImportError_(f"Error reading the {FORMATS[fmt]} file: {exc}") from exc
     if not foreign.nodes:
-        raise ImportError_("Il file non contiene nodi")
+        raise ImportError_("The file contains no nodes")
     return build(foreign, templates, overrides, lab_name)
 
 
@@ -582,7 +582,7 @@ def export_clab(lab: Lab, templates: dict[str, Template], configs: dict[str, str
     for n in lab.nodes:
         tpl = templates.get(n.template)
         if tpl is None:
-            warns.append(f"{n.name}: template sconosciuto, saltato")
+            warns.append(f"{n.name}: unknown template, skipped")
             continue
         d: dict = {}
         if tpl.kind == "docker":
@@ -590,15 +590,15 @@ def export_clab(lab: Lab, templates: dict[str, Template], configs: dict[str, str
         elif tpl.kind == "qemu":
             kind = CLAB_KIND.get(n.template, "generic_vm")
             d = {"kind": kind, "image": f"vrnetlab/{kind}:{n.image or tpl.image}"}
-            warns.append(f"{n.name}: VM → containerlab kind '{kind}' (serve l'immagine vrnetlab corrispondente)")
+            warns.append(f"{n.name}: VM → containerlab kind '{kind}' (the matching vrnetlab image is required)")
             for i, ifc in enumerate(tpl.interface_names(n.nics)):
                 rename_if[(n.name, ifc)] = f"eth{i + 1}"
         elif tpl.kind == "bridge":
             d = {"kind": "bridge"}
-            warns.append(f"{n.name}: kind bridge di containerlab richiede un bridge '{n.name}' già creato sull'host")
+            warns.append(f"{n.name}: containerlab bridge kind requires a bridge '{n.name}' already created on the host")
         else:
             d = {"kind": "host"}
-            warns.append(f"{n.name}: rete esterna → kind 'host' (verifica le interfacce)")
+            warns.append(f"{n.name}: external network → kind 'host' (check the interfaces)")
         if configs.get(n.name):
             d["startup-config"] = configs[n.name]
         d["labels"] = {"graph-posX": str(int(n.x)), "graph-posY": str(int(n.y))}
@@ -613,7 +613,7 @@ def export_clab(lab: Lab, templates: dict[str, Template], configs: dict[str, str
         if len(eps) == 2:
             links.append({"endpoints": eps})
     doc = {"name": lab.name, "topology": {"nodes": nodes, "links": links}}
-    head = f"# Esportato da NetSO — lab {lab.name}\n"
+    head = f"# Exported from NetSO — lab {lab.name}\n"
     return head + _dump(doc), warns
 
 
@@ -625,7 +625,7 @@ def export_cml(lab: Lab, templates: dict[str, Template], configs: dict[str, str]
             continue
         nd = CML_DEF.get(n.template, n.template)
         if n.template not in CML_DEF:
-            warns.append(f"{n.name}: in CML serve una node definition '{nd}' (non è nella reference platform)")
+            warns.append(f"{n.name}: in CML a node definition '{nd}' is required (not in the reference platform)")
         ifaces = []
         for i, ifc in enumerate(tpl.interface_names(n.nics)):
             label = _long_iface(ifc) if n.template.startswith("cisco") else (f"port{i}" if tpl.kind in ("bridge", "external") else ifc)
@@ -644,7 +644,7 @@ def export_cml(lab: Lab, templates: dict[str, Template], configs: dict[str, str]
         a, b = (tuple(e.split(":", 1)) for e in ln.endpoints)
         if a in ids and b in ids:
             links.append({"id": f"l{j}", "n1": ids[a][0], "i1": ids[a][1], "n2": ids[b][0], "i2": ids[b][1], "label": f"{a[0]}-{a[1]}<->{b[0]}-{b[1]}"})
-    doc = {"lab": {"title": lab.name, "description": lab.description, "notes": "Esportato da NetSO", "version": "0.2.2"},
+    doc = {"lab": {"title": lab.name, "description": lab.description, "notes": "Exported from NetSO", "version": "0.2.2"},
            "nodes": nodes, "links": links}
     if lab.annotations:
         doc["annotations"] = cml_export_annotations(lab.annotations)

@@ -79,10 +79,10 @@ def kinds() -> list[dict]:
 def save(data: dict) -> dict:
     kind = data.get("kind")
     if kind not in KINDS:
-        raise AgentError(f"Tipo provider sconosciuto: {kind}")
+        raise AgentError(f"Unknown provider type: {kind}")
     name = (data.get("name") or "").strip()
     if not name:
-        raise AgentError("Dai un nome all'agente")
+        raise AgentError("Give the agent a name")
     agents = _load()
     aid = data.get("id")
     cur = next((a for a in agents if a["id"] == aid), None) if aid else None
@@ -94,7 +94,7 @@ def save(data: dict) -> dict:
     if _auth(kind) == "cli":
         cmd = (data.get("command") or "").strip()
         if not cmd:
-            raise AgentError("Indica il comando da eseguire (es. «claude -p» o «ollama run llama3»)")
+            raise AgentError("Specify the command to run (e.g. «claude -p» or «ollama run llama3»)")
         rec["command"] = cmd
     key = data.get("api_key")
     if key:  # an empty/omitted key on edit keeps the stored one
@@ -108,14 +108,14 @@ def save(data: dict) -> dict:
 def delete(aid: str) -> None:
     agents = _load()
     if not any(a["id"] == aid for a in agents):
-        raise FileNotFoundError(f"Agente '{aid}' inesistente")
+        raise FileNotFoundError(f"Agent '{aid}' does not exist")
     _save([a for a in agents if a["id"] != aid])
 
 
 def _get(aid: str) -> dict:
     a = next((x for x in _load() if x["id"] == aid), None)
     if not a:
-        raise FileNotFoundError(f"Agente '{aid}' inesistente")
+        raise FileNotFoundError(f"Agent '{aid}' does not exist")
     return a
 
 
@@ -124,7 +124,7 @@ def build_request(a: dict, prompt: str, system: str | None = None) -> tuple[str,
     kind, base, model = a["kind"], a.get("base_url") or KINDS[a["kind"]]["base"], a.get("model") or KINDS[a["kind"]]["model"]
     key = a.get("api_key") or ""
     if _auth(kind) == "key" and not key:
-        raise AgentError(f"Manca la chiave API per '{a['name']}'")
+        raise AgentError(f"Missing API key for '{a['name']}'")
     if kind == "anthropic":
         headers = {"content-type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01"}
         body = {"model": model, "max_tokens": 2048, "messages": [{"role": "user", "content": prompt}]}
@@ -155,7 +155,7 @@ def parse_response(kind: str, data: dict) -> str:
             return "".join(p.get("text", "") for p in data["candidates"][0]["content"]["parts"])
         return data["choices"][0]["message"]["content"]
     except (KeyError, IndexError, TypeError):
-        raise AgentError(f"Risposta del provider non interpretabile: {json.dumps(data)[:200]}")
+        raise AgentError(f"Could not parse the provider's response: {json.dumps(data)[:200]}")
 
 
 def run_cli(a: dict, prompt: str, system: str | None = None, timeout: float = 120) -> str:
@@ -170,29 +170,29 @@ def run_cli(a: dict, prompt: str, system: str | None = None, timeout: float = 12
     try:
         toks = shlex.split(cmd)
     except ValueError as exc:
-        raise AgentError(f"Comando non valido: {exc}")
+        raise AgentError(f"Invalid command: {exc}")
     if not toks:
-        raise AgentError("Comando vuoto")
+        raise AgentError("Empty command")
     on_stdin = "{prompt}" not in toks
     toks = [text if t == "{prompt}" else t for t in toks]
     try:
         r = subprocess.run(toks, input=(text if on_stdin else None), capture_output=True,  # noqa: S603 — admin-configured command
                            text=True, timeout=timeout)
     except FileNotFoundError:
-        raise AgentError(f"Comando non trovato: {toks[0]} (installalo e fai il login col tuo abbonamento)")
+        raise AgentError(f"Command not found: {toks[0]} (install it and log in with your subscription)")
     except subprocess.TimeoutExpired:
-        raise AgentError("Il comando non ha risposto in tempo")
+        raise AgentError("The command did not respond in time")
     except OSError as exc:
-        raise AgentError(f"Non riesco a eseguire il comando: {exc}")
+        raise AgentError(f"Cannot run the command: {exc}")
     if r.returncode != 0:
-        raise AgentError(f"Il comando è uscito con errore: {(r.stderr or r.stdout).strip()[:300] or r.returncode}")
+        raise AgentError(f"The command exited with an error: {(r.stderr or r.stdout).strip()[:300] or r.returncode}")
     return (r.stdout or "").strip()
 
 
 def ask(aid: str, prompt: str, system: str | None = None, timeout: float = 120) -> str:
     a = _get(aid)
     if not a.get("enabled", True):
-        raise AgentError(f"L'agente '{a['name']}' è disattivato")
+        raise AgentError(f"The agent '{a['name']}' is disabled")
     if _auth(a["kind"]) == "cli":
         return run_cli(a, prompt, system, timeout)
     url, headers, body = build_request(a, prompt, system)
@@ -202,7 +202,7 @@ def ask(aid: str, prompt: str, system: str | None = None, timeout: float = 120) 
             data = json.loads(resp.read().decode())
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode(errors="replace")[:300]
-        raise AgentError(f"Il provider ha risposto {exc.code}: {detail}")
+        raise AgentError(f"The provider responded {exc.code}: {detail}")
     except (urllib.error.URLError, TimeoutError, OSError) as exc:
-        raise AgentError(f"Non raggiungo il provider ({a.get('base_url')}): {exc}")
+        raise AgentError(f"Cannot reach the provider ({a.get('base_url')}): {exc}")
     return parse_response(a["kind"], data).strip()
