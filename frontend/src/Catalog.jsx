@@ -125,7 +125,7 @@ function DevicesTab({ templates, images, onChanged, onError, admin }) {
               const ok = !['qemu', 'iol', 'dynamips'].includes(tpl.kind) ? true : images ? have.has(tpl.image) : null
               return (
                 <tr key={tpl.name} title={[tpl.vendor, tpl.description, tpl.source].filter(Boolean).join(' · ')}>
-                  <td><span className="dev-cell"><Icon name={tpl.icon} size={20} /><b>{tpl.name}</b>{tpl.origin && tpl.origin !== 'integrato' && <span className="muted small">{tpl.origin}</span>}</span></td>
+                  <td><span className="dev-cell"><Icon name={tpl.icon} size={20} /><b>{tpl.name}</b>{tpl.origin && tpl.origin !== 'integrato' && <span className="muted small">{t(`catalog.origin.${tpl.origin}`)}</span>}</span></td>
                   <td className="muted">{kindLabel(tpl.kind) || tpl.kind}</td>
                   <td><code className="small">{tpl.image || '—'}</code></td>
                   <td className="muted small">{['qemu', 'docker', 'iol', 'dynamips'].includes(tpl.kind) ? t('catalog.resVm', { cpus: tpl.cpus, ram: tpl.ram, nics: tpl.nics }) : t('catalog.resPorts', { nics: tpl.nics })}</td>
