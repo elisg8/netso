@@ -645,6 +645,7 @@ button.danger-t { color: var(--danger); }
 .cwin-head { cursor: move; }
 .cwin-head .grow { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cwin-drag { display: inline-grid; place-items: center; color: var(--muted); padding: 2px 2px; flex: none; }
+.cwin-title { flex: 1; min-width: 0; font-size: 12.5px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 2px 2px; }
 .cwin-tabs .tab { cursor: pointer; }
 .cwin-tabs { flex: 1; min-width: 0; display: flex; gap: 2px; overflow-x: auto; overflow-y: hidden; scrollbar-width: thin; }
 .cwin-tabs::-webkit-scrollbar { height: 5px; }

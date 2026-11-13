@@ -342,16 +342,20 @@ export function ConsoleWindows({ lab, items, kindOf, onClose }) {
     <div className="cwin" style={{ left: win.x, top: win.y, width: win.w, height: win.h, zIndex: 40 }}>
       <div className="cwin-head" title="Trascina per spostare la finestra" onMouseDown={(e) => grab(e, 'move')}>
         <span className="cwin-drag"><Ui name="console" size={14} /></span>
-        <div className="cwin-tabs">
-          {items.map((it) => (
-            <div key={it.id} className={`tab ${it.id === active ? 'on' : ''}`} title={it.node} onMouseDown={(e) => { e.stopPropagation(); setActive(it.id) }}>
-              <span className="grow">{it.node}</span>
-              <button className="x" title="Chiudi scheda" onMouseDown={(e) => e.stopPropagation()} onClick={() => onClose(it.id)}>×</button>
-            </div>
-          ))}
-        </div>
+        {items.length === 1 ? (
+          <span className="cwin-title grow">{items[0].node}</span>
+        ) : (
+          <div className="cwin-tabs">
+            {items.map((it) => (
+              <div key={it.id} className={`tab ${it.id === active ? 'on' : ''}`} title={it.node} onMouseDown={(e) => { e.stopPropagation(); setActive(it.id) }}>
+                <span className="grow">{it.node}</span>
+                <button className="x" title="Chiudi scheda" onMouseDown={(e) => e.stopPropagation()} onClick={() => onClose(it.id)}>×</button>
+              </div>
+            ))}
+          </div>
+        )}
         <button className="cwin-btn" title="Riduci a icona" onMouseDown={(e) => e.stopPropagation()} onClick={() => upd({ min: true })}><Ui name="minus" size={14} /></button>
-        <button className="cwin-btn" title="Chiudi tutte le consolle" onMouseDown={(e) => e.stopPropagation()} onClick={() => items.forEach((it) => onClose(it.id))}><Ui name="close" size={14} /></button>
+        <button className="cwin-btn" title={items.length > 1 ? 'Chiudi tutte le consolle' : 'Chiudi'} onMouseDown={(e) => e.stopPropagation()} onClick={() => items.forEach((it) => onClose(it.id))}><Ui name="close" size={14} /></button>
       </div>
       <div className="cwin-body">
         {items.map((it) => <Console key={it.id} lab={lab} node={it.node} visible={it.id === active} kind={kindOf(it.node)} />)}
