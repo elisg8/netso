@@ -6,6 +6,7 @@ import {
 import { CONSOLES, NIC_MODELS, api, apiUrl, byTitle, consoleLabel, interfaceNames, splitEp, tplTitle, uploadTo, wsUrl } from './api.js'
 import Icon, { DEVICE_COLORS, LINE_ICONS, Ui, lineLabel, setIconStyle, useIconStyle } from './icons.jsx'
 import { THEMES, isLight, setTheme, useTheme } from './theme.js'
+import { LANGS, setLang, t, useLang } from './i18n.js'
 import Console, { ConsoleWindows, POPUP_KINDS, consoleKind, openConsoleWindow } from './Console.jsx'
 import { WiresharkWindows } from './Wireshark.jsx'
 import { EXPORT_FORMATS, SnapshotsDialog, downloadExport } from './Interop.jsx'
@@ -1470,19 +1471,43 @@ function TopBtn({ icon, label, title, onClick, disabled, badge, cls = '' }) {
 
 export function ThemeButton() {
   const theme = useTheme()
+  useLang()
   const [open, setOpen] = useState(false)
   return (
     <div className="theme-pick">
-      <button className="icon-btn theme-btn" title="Tema colori" onClick={() => setOpen((v) => !v)}><Ui name="palette" /></button>
+      <button className="icon-btn theme-btn" title={t('common.theme')} onClick={() => setOpen((v) => !v)}><Ui name="palette" /></button>
       {open && <>
         <div className="theme-pop-bg" onMouseDown={() => setOpen(false)} />
         <div className="theme-pop">
-          {THEMES.map((t) => (
-            <button key={t.id} className={`theme-row ${t.id === theme ? 'on' : ''}`} type="button"
-              onClick={() => { setTheme(t.id); setOpen(false) }}>
-              <span className="theme-sw" style={{ background: t.bg }}><i style={{ background: t.accent }} /></span>
-              <span className="grow">{t.label}</span>
-              {t.id === theme && <Ui name="check" size={14} />}
+          {THEMES.map((th) => (
+            <button key={th.id} className={`theme-row ${th.id === theme ? 'on' : ''}`} type="button"
+              onClick={() => { setTheme(th.id); setOpen(false) }}>
+              <span className="theme-sw" style={{ background: th.bg }}><i style={{ background: th.accent }} /></span>
+              <span className="grow">{t(`theme.${th.id}`)}</span>
+              {th.id === theme && <Ui name="check" size={14} />}
+            </button>
+          ))}
+        </div>
+      </>}
+    </div>
+  )
+}
+
+// Language switcher, same shape as ThemeButton.
+export function LangButton() {
+  const lang = useLang()
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="theme-pick">
+      <button className="icon-btn theme-btn" title={t('common.language')} onClick={() => setOpen((v) => !v)}><Ui name="lang" /></button>
+      {open && <>
+        <div className="theme-pop-bg" onMouseDown={() => setOpen(false)} />
+        <div className="theme-pop">
+          {LANGS.map((l) => (
+            <button key={l.id} className={`theme-row ${l.id === lang ? 'on' : ''}`} type="button"
+              onClick={() => { setLang(l.id); setOpen(false) }}>
+              <span className="grow">{l.label}</span>
+              {l.id === lang && <Ui name="check" size={14} />}
             </button>
           ))}
         </div>

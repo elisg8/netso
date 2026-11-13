@@ -2,7 +2,8 @@
 import { useEffect, useId, useState } from 'react'
 import { api } from './api.js'
 import { Ui } from './icons.jsx'
-import { ModalHead, ThemeButton } from './LabView.jsx'
+import { ModalHead, ThemeButton, LangButton } from './LabView.jsx'
+import { t, useLang } from './i18n.js'
 
 // App mark: an "N" drawn as a network path through four nodes
 export function Logo({ size = 32 }) {
@@ -23,6 +24,7 @@ export function Logo({ size = 32 }) {
 }
 
 export default function Login({ onLogin }) {
+  useLang()
   const [user, setUser] = useState('')
   const [pass, setPass] = useState('')
   const [err, setErr] = useState(null)
@@ -35,31 +37,31 @@ export default function Login({ onLogin }) {
     try {
       onLogin(await api('/auth/login', { method: 'POST', body: { username: user, password: pass }, noAuth: true }))
     } catch (ex) {
-      setErr(ex.message || 'Accesso non riuscito'); setPass('')
+      setErr(ex.message || t('login.failed')); setPass('')
     } finally { setBusy(false) }
   }
   return (
     <div className="login-bg">
-      <header className="login-top"><Logo size={34} /><b>NetSO</b><span className="spacer" /><ThemeButton /></header>
+      <header className="login-top"><Logo size={34} /><b>NetSO</b><span className="spacer" /><LangButton /><ThemeButton /></header>
       <div className="login-center">
         <form className="login" onSubmit={submit}>
           <div className="login-logo">
             <div className="login-mark"><Logo size={72} /></div>
             <h1>NetSO</h1>
-            <small className="muted">Lab di rete: VM, container e topologie</small>
+            <small className="muted">{t('login.tagline')}</small>
             {hint && <div className="login-meta">
-              <span>Versione {hint.version}</span>
-              {hint.default_account && <span>Account predefinito: <b>admin</b> / <b>Netso</b></span>}
+              <span>{t('login.version', { v: hint.version })}</span>
+              {hint.default_account && <span>{t('login.defaultAccount')} <b>admin</b> / <b>Netso</b></span>}
             </div>}
           </div>
-          <label className="field"><span>Utente</span>
+          <label className="field"><span>{t('login.user')}</span>
             <div className="in-ico"><Ui name="user" size={16} /><input autoFocus autoComplete="username" required value={user} onChange={(e) => setUser(e.target.value)} /></div>
           </label>
-          <label className="field"><span>Password</span>
+          <label className="field"><span>{t('login.password')}</span>
             <div className="in-ico"><Ui name="lock" size={16} /><input type="password" autoComplete="current-password" required value={pass} onChange={(e) => setPass(e.target.value)} /></div>
           </label>
           {err && <div className="login-err">{err}</div>}
-          <button className="primary wide" disabled={busy}>{busy ? 'Accesso…' : 'Accedi'}</button>
+          <button className="primary wide" disabled={busy}>{busy ? t('login.signingIn') : t('login.signIn')}</button>
         </form>
       </div>
     </div>
@@ -67,29 +69,30 @@ export default function Login({ onLogin }) {
 }
 
 export function PasswordDialog({ onClose, onError }) {
+  useLang()
   const [old, setOld] = useState('')
   const [pw, setPw] = useState('')
   const [pw2, setPw2] = useState('')
   const [done, setDone] = useState(false)
   const submit = async (e) => {
     e.preventDefault()
-    if (pw !== pw2) return onError(new Error('Le due password non coincidono'))
+    if (pw !== pw2) return onError(new Error(t('pw.mismatch')))
     try { await api('/auth/password', { method: 'POST', body: { old, new: pw } }); setDone(true) } catch (ex) { onError(ex) }
   }
   return (
     <div className="modal-bg" onClick={onClose}>
       <form className="modal" onClick={(e) => e.stopPropagation()} onSubmit={submit}>
-        <ModalHead icon="key" title="Cambia password" onClose={onClose} />
+        <ModalHead icon="key" title={t('pw.title')} onClose={onClose} />
         {done ? <>
-          <p>Password aggiornata.</p>
-          <div className="row-end"><button type="button" className="primary" onClick={onClose}>Chiudi</button></div>
+          <p>{t('pw.updated')}</p>
+          <div className="row-end"><button type="button" className="primary" onClick={onClose}>{t('common.close')}</button></div>
         </> : <>
-          <label className="field"><span>Password attuale</span><input type="password" autoFocus required autoComplete="current-password" value={old} onChange={(e) => setOld(e.target.value)} /></label>
-          <label className="field"><span>Nuova password</span><input type="password" required minLength={4} autoComplete="new-password" value={pw} onChange={(e) => setPw(e.target.value)} /></label>
-          <label className="field"><span>Ripeti la nuova password</span><input type="password" required minLength={4} autoComplete="new-password" value={pw2} onChange={(e) => setPw2(e.target.value)} /></label>
+          <label className="field"><span>{t('pw.current')}</span><input type="password" autoFocus required autoComplete="current-password" value={old} onChange={(e) => setOld(e.target.value)} /></label>
+          <label className="field"><span>{t('pw.new')}</span><input type="password" required minLength={4} autoComplete="new-password" value={pw} onChange={(e) => setPw(e.target.value)} /></label>
+          <label className="field"><span>{t('pw.repeat')}</span><input type="password" required minLength={4} autoComplete="new-password" value={pw2} onChange={(e) => setPw2(e.target.value)} /></label>
           <div className="row-end">
-            <button type="button" className="ghost" onClick={onClose}>Annulla</button>
-            <button className="primary">Salva</button>
+            <button type="button" className="ghost" onClick={onClose}>{t('common.cancel')}</button>
+            <button className="primary">{t('common.save')}</button>
           </div>
         </>}
       </form>

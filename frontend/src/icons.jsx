@@ -355,6 +355,7 @@ const ui = {
   search: <><FC cx="11" cy="11" r="6.8" /><circle cx="11" cy="11" r="6.8" /><path d="M16 16l4.5 4.5" /></>,
   palette: <><F d="M12 3.5a8.5 8.5 0 0 0 0 17c1.4 0 2-1 2-2.1 0-1.2 1-2 2.2-2H18a3 3 0 0 0 3-3c0-4.7-4-6.9-9-6.9z" /><path d="M12 3.5a8.5 8.5 0 0 0 0 17c1.4 0 2-1 2-2.1 0-1.2 1-2 2.2-2H18a3 3 0 0 0 3-3c0-4.7-4-6.9-9-6.9z" /><circle cx="7.6" cy="11.4" r=".9" fill="currentColor" stroke="none" /><circle cx="9.8" cy="7.8" r=".9" fill="currentColor" stroke="none" /><circle cx="14.2" cy="7.8" r=".9" fill="currentColor" stroke="none" /></>,
   check: <path d="M4.5 12.5l4.5 4.5 10.5-11" />,
+  lang: <><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3c2.5 2.5 2.5 15 0 18M12 3c-2.5 2.5-2.5 15 0 18M4.5 7h15M4.5 17h15" /></>,
   hand: <path d="M8.5 11V5.4a1.3 1.3 0 0 1 2.6 0V10m0-.6V4.2a1.3 1.3 0 0 1 2.6 0V10m0-.4V5.1a1.3 1.3 0 0 1 2.6 0V11m0-2.4a1.3 1.3 0 0 1 2.6 0V13a6 6 0 0 1-6 6h-1a6 6 0 0 1-4.3-1.8l-3-3a1.4 1.4 0 0 1 2-2l1.3 1.3" />,
   expand: <path d="M4 9V5a1 1 0 0 1 1-1h4M20 9V5a1 1 0 0 0-1-1h-4M4 15v4a1 1 0 0 0 1 1h4M20 15v4a1 1 0 0 1-1 1h-4" />,
   // nerd: face with big round glasses and a little smile

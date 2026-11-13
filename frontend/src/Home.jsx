@@ -2,7 +2,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api, splitEp } from './api.js'
 import Icon, { DEVICE_COLORS, Ui, setIconStyle, useIconStyle } from './icons.jsx'
-import { ContextMenu, ModalHead, StatusDialog, ThemeButton, linkDash, linkGeometry, portPoint, portState } from './LabView.jsx'
+import { ContextMenu, ModalHead, StatusDialog, ThemeButton, LangButton, linkDash, linkGeometry, portPoint, portState } from './LabView.jsx'
+import { t, useLang } from './i18n.js'
 import { Logo } from './Login.jsx'
 import { EXPORT_FORMATS, ImportDialog, downloadExport } from './Interop.jsx'
 import CatalogDialog, { IconsDialog } from './Catalog.jsx'
@@ -25,6 +26,7 @@ const remember = (k, v) => { try { localStorage.setItem(k, v) } catch { /* ignor
 const recall = (k) => { try { return localStorage.getItem(k) || '' } catch { return '' } }
 
 export default function Home({ labs, folders, info, templates, me, onOpen, onRefresh, onError, onLogout, onPassword }) {
+  useLang()
   const [path, setPath] = useState(() => recall('netso.folder'))
   const [view, setView] = useState('files') // files | running
   const [sel, setSel] = useState(null) // row shown in the preview
@@ -239,36 +241,37 @@ export default function Home({ labs, folders, info, templates, me, onOpen, onRef
       <header className="topnav">
         <button className="tn-brand" onClick={() => go('')}><Logo size={30} /><b>NetSO</b></button>
         <nav className="tn-links">
-          <button className={view === 'files' ? 'on' : ''} onClick={() => go(path)}><Ui name="home" size={17} /> Workspace</button>
+          <button className={view === 'files' ? 'on' : ''} onClick={() => go(path)}><Ui name="home" size={17} /> {t('nav.workspace')}</button>
           <button className={view === 'running' ? 'on' : ''} onClick={() => { setView('running'); setSel(null); setChecked(new Set()) }}>
-            <Ui name="play" size={15} /> Lab avviati <span className={`badge ${running.length ? 'hot' : ''}`}>{running.length}</span>
+            <Ui name="play" size={15} /> {t('nav.running')} <span className={`badge ${running.length ? 'hot' : ''}`}>{running.length}</span>
           </button>
-          <button onClick={() => setDialog({ kind: 'devices' })}><Ui name="nodes" size={16} /> Dispositivi</button>
-          <button onClick={() => setDialog({ kind: 'users' })}><Ui name="user" size={16} /> Utenti</button>
-          <button onClick={(e) => dropdown(e, 'Sistema', 'status', [
-            { icon: 'status', label: 'Stato del server', onClick: () => setDialog({ kind: 'status' }) },
-            { icon: 'links', label: 'Server collegati…', onClick: () => setDialog({ kind: 'servers' }) },
-            { icon: 'save', label: 'Immagini', onClick: () => setDialog({ kind: 'devices', tab: 'images' }) },
-            me?.role === 'admin' && { icon: 'nerd', label: 'NetSO Assistant (provider AI)…', onClick: () => setDialog({ kind: 'agents' }) },
-            { head: 'Icone dei dispositivi' },
-            { icon: iconStyle === 'modern' ? 'select' : 'more', label: 'Moderne', onClick: () => setIconStyle('modern') },
-            { icon: iconStyle === 'classic' ? 'select' : 'more', label: 'Classiche 3D', onClick: () => setIconStyle('classic') },
-            { icon: iconStyle === 'line' ? 'select' : 'more', label: 'NetSO Line', onClick: () => setIconStyle('line') },
-            { icon: iconStyle === 'rack' ? 'select' : 'more', label: 'NetSO Rack', onClick: () => setIconStyle('rack') },
-            me?.role === 'admin' && { icon: 'upload', label: 'Icone personalizzate…', onClick: () => setDialog({ kind: 'icons' }) },
+          <button onClick={() => setDialog({ kind: 'devices' })}><Ui name="nodes" size={16} /> {t('nav.devices')}</button>
+          <button onClick={() => setDialog({ kind: 'users' })}><Ui name="user" size={16} /> {t('nav.users')}</button>
+          <button onClick={(e) => dropdown(e, t('nav.system'), 'status', [
+            { icon: 'status', label: t('nav.serverStatus'), onClick: () => setDialog({ kind: 'status' }) },
+            { icon: 'links', label: t('nav.linkedServers'), onClick: () => setDialog({ kind: 'servers' }) },
+            { icon: 'save', label: t('nav.images'), onClick: () => setDialog({ kind: 'devices', tab: 'images' }) },
+            me?.role === 'admin' && { icon: 'nerd', label: t('nav.assistant'), onClick: () => setDialog({ kind: 'agents' }) },
+            { head: t('nav.deviceIcons') },
+            { icon: iconStyle === 'modern' ? 'select' : 'more', label: t('nav.iconsModern'), onClick: () => setIconStyle('modern') },
+            { icon: iconStyle === 'classic' ? 'select' : 'more', label: t('nav.iconsClassic'), onClick: () => setIconStyle('classic') },
+            { icon: iconStyle === 'line' ? 'select' : 'more', label: t('nav.iconsLine'), onClick: () => setIconStyle('line') },
+            { icon: iconStyle === 'rack' ? 'select' : 'more', label: t('nav.iconsRack'), onClick: () => setIconStyle('rack') },
+            me?.role === 'admin' && { icon: 'upload', label: t('nav.customIcons'), onClick: () => setDialog({ kind: 'icons' }) },
             { sep: true },
-            { icon: 'refresh', label: 'Aggiorna tutto', onClick: onRefresh },
-          ])}><Ui name="config" size={16} /> Sistema <Ui name="chev" size={12} /></button>
+            { icon: 'refresh', label: t('common.refreshAll'), onClick: onRefresh },
+          ])}><Ui name="config" size={16} /> {t('nav.system')} <Ui name="chev" size={12} /></button>
         </nav>
         <div className="spacer" />
         {info && <HostChips info={info} onClick={() => setDialog({ kind: 'status' })} />}
+        <LangButton />
         <ThemeButton />
         {me && (
           <button className="user-btn" onClick={(e) => dropdown(e, me.user, 'user', [
-            { icon: 'key', label: 'Cambia password', onClick: onPassword },
-            { icon: 'user', label: 'Gestione utenti', onClick: () => setDialog({ kind: 'users' }) },
+            { icon: 'key', label: t('user.changePassword'), onClick: onPassword },
+            { icon: 'user', label: t('user.manageUsers'), onClick: () => setDialog({ kind: 'users' }) },
             { sep: true },
-            { icon: 'exit', label: 'Esci', onClick: onLogout },
+            { icon: 'exit', label: t('user.logout'), onClick: onLogout },
           ], true)}>
             <span className="avatar">{me.user.slice(0, 1).toUpperCase()}</span>{me.user}<Ui name="chev" size={12} />
           </button>
@@ -277,7 +280,7 @@ export default function Home({ labs, folders, info, templates, me, onOpen, onRef
 
       {/* ------------------------------------------------ workspace header */}
       <div className="ws-title">
-        <h2><Ui name={view === 'running' ? 'play' : 'links'} size={20} /> {view === 'running' ? 'Lab avviati' : 'Workspace'}</h2>
+        <h2><Ui name={view === 'running' ? 'play' : 'links'} size={20} /> {view === 'running' ? t('nav.running') : t('nav.workspace')}</h2>
         {view === 'files' && (
           <nav className="crumbs">
             <button className={`crumb ${!path ? 'cur' : ''}`} onClick={() => go('')}><Ui name="folder" size={15} /> root</button>
