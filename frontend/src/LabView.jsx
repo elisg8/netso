@@ -16,7 +16,6 @@ const PREFIX = { router: 'r', switch: 'sw', l3switch: 'sw', bridge: 'br', firewa
 const KINDS = ['qemu', 'dynamips', 'iol', 'docker', 'bridge', 'external', 'nat', 'vxlan']
 const SHARED = ['bridge', 'external', 'nat', 'vxlan']
 const KIND_LABEL = { qemu: 'Macchine virtuali', dynamips: 'Router classici (Dynamips)', iol: 'Cisco IOL', docker: 'Container', bridge: 'Switch', external: 'Rete esterna', nat: 'Internet (NAT)', vxlan: 'Verso altro server (VXLAN)' }
-const ACTION_LABEL = { start: 'Avvio', stop: 'Arresto', wipe: 'Azzeramento' }
 const NAME_RE = /^[A-Za-z][A-Za-z0-9_-]{0,31}$/
 const NODE_NAME_RE = /^[A-Za-z][A-Za-z0-9 _-]{0,31}$/ // node names may contain single spaces
 
@@ -54,6 +53,7 @@ function condSummary(l) {
 
 // ------------------------------------------------------------ canvas node
 function DeviceNode({ data, selected }) {
+  useLang()
   const act = useContext(NodeActions)
   const iconStyle = useIconStyle()
   const [hover, setHover] = useState(false)
@@ -62,7 +62,7 @@ function DeviceNode({ data, selected }) {
   const k = data.size / 100
   const st = data.status || 'stopped'
   const running = st === 'running'
-  const stLabel = running ? 'in esecuzione' : st === 'error' ? 'errore' : 'fermo'
+  const stLabel = running ? t('labview.status.running') : st === 'error' ? t('labview.status.error') : t('labview.status.stopped')
   return (
     <div className={`devnode ${selected ? 'sel' : ''} st-${st} ${classic ? 'classic' : ''} ${data.pending ? `pend-${data.pending}` : ''}`}
       title={data.error || data.description || data.name} style={{ '--k': k, width: Math.max(86, 58 * k + 28) }}
@@ -71,14 +71,14 @@ function DeviceNode({ data, selected }) {
       <NodeToolbar isVisible={(hover || selected) && !act.multi} position={Position.Top} offset={10}>
         <div className="node-tb">
           {running
-            ? <TbBtn title="Ferma" icon="stop" disabled={!data.vm} onClick={() => act.onAction?.(data.name, 'stop')} />
-            : <TbBtn title="Avvia" icon="play" cls="go" disabled={!data.vm} onClick={() => act.onAction?.(data.name, 'start')} />}
-          <TbBtn title="Consolle" icon="console" disabled={!(running && data.hasConsole)} onClick={() => act.onConsole?.(data.name)} />
-          <TbBtn title="Modifica" icon="edit" onClick={() => act.onEdit?.(data.name)} />
+            ? <TbBtn title={t('labview.stop')} icon="stop" disabled={!data.vm} onClick={() => act.onAction?.(data.name, 'stop')} />
+            : <TbBtn title={t('labview.start')} icon="play" cls="go" disabled={!data.vm} onClick={() => act.onAction?.(data.name, 'start')} />}
+          <TbBtn title={t('labview.console')} icon="console" disabled={!(running && data.hasConsole)} onClick={() => act.onConsole?.(data.name)} />
+          <TbBtn title={t('labview.edit')} icon="edit" onClick={() => act.onEdit?.(data.name)} />
         </div>
       </NodeToolbar>
       {/* EVE-NG style plug: appears on hover, drag it onto another node to connect */}
-      <Handle type="source" position={Position.Top} className="hdl plug" title="Trascina su un altro nodo per collegarlo">
+      <Handle type="source" position={Position.Top} className="hdl plug" title={t('labview.node.plugHint')}>
         <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M8.5 3.5h7v4h1.8v5.2a2 2 0 0 1-2 2h-1.8v6h-3v-6H8.7a2 2 0 0 1-2-2V7.5h1.8z" fill="currentColor" /><path d="M10.3 3.5v2.4M12 3.5v2.4M13.7 3.5v2.4" stroke="#3a1606" strokeWidth="1.1" strokeLinecap="round" /></svg>
       </Handle>
       {/* while a link is being drawn the whole device accepts the drop, not just the small dot */}
@@ -88,7 +88,7 @@ function DeviceNode({ data, selected }) {
         {data.pending && <span className="boot-ring" />}
       </div>
       {/* EVE-NG style status next to the name: red square = off, green play = on */}
-      <div className="lbl"><StatusMark st={data.pending ? 'pending' : st} title={data.pending === 'start' ? 'in avvio' : data.pending === 'stop' ? 'in arresto' : stLabel} />{data.name}{data.pinned && <Ui name="lock" size={10} />}</div>
+      <div className="lbl"><StatusMark st={data.pending ? 'pending' : st} title={data.pending === 'start' ? t('labview.status.starting') : data.pending === 'stop' ? t('labview.status.stopping') : stLabel} />{data.name}{data.pinned && <Ui name="lock" size={10} />}</div>
     </div>
   )
 }
@@ -136,6 +136,7 @@ function AnnArrow({ id, color }) {
 }
 
 function NoteNode({ id, data: a, selected }) {
+  useLang()
   const act = useContext(NodeActions)
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(a.text)
@@ -171,7 +172,7 @@ function NoteNode({ id, data: a, selected }) {
             markerStart={['start', 'both'].includes(a.arrow) ? `url(#arw-${id})` : undefined} markerEnd={['end', 'both'].includes(a.arrow) ? `url(#arw-${id})` : undefined} />}
         </svg>
       ) : a.type === 'image' ? (
-        a.image ? <img src={a.image} alt="" draggable={false} style={{ opacity: a.opacity }} /> : <div className="ann-noimg"><Ui name="save" size={22} /> Immagine</div>
+        a.image ? <img src={a.image} alt="" draggable={false} style={{ opacity: a.opacity }} /> : <div className="ann-noimg"><Ui name="save" size={22} /> {t('labview.image')}</div>
       ) : (
         <div className="ann-box" style={boxStyle}>{(a.text || editing) && text}</div>
       )}
@@ -225,17 +226,16 @@ export function portPoint(cx, cy, [dx, dy], half, gap = 1) {
   return [cx + dx * d, cy + dy * d]
 }
 export const portState = (st) => st === 'running' ? 'up' : st === 'error' ? 'err' : st === 'deploying' ? 'wait' : 'down'
-const PORT_TITLE = { up: 'acceso', down: 'spento', err: 'errore', wait: 'in avvio' }
-
 function CenterEdge({ id, source, target, data, selected, interactionWidth }) {
+  useLang()
   const s = useInternalNode(source)
-  const t = useInternalNode(target)
+  const tgt = useInternalNode(target)
   const [hv, setHv] = useState(false)
-  if (!s || !t) return null
+  if (!s || !tgt) return null
   const half = (n) => CHIP_HALF * (n.data?.size || 100) / 100
   const c = (n) => [n.internals.positionAbsolute.x + (n.measured?.width || 0) / 2, n.internals.positionAbsolute.y + half(n)]
   let [sx, sy] = c(s)
-  let [tx, ty] = c(t)
+  let [tx, ty] = c(tgt)
   const len0 = Math.hypot(tx - sx, ty - sy) || 1
   if (data.offset) { // parallel links between the same pair of nodes are spread apart
     const ux = (tx - sx) / len0, uy = (ty - sy) / len0
@@ -245,7 +245,7 @@ function CenterEdge({ id, source, target, data, selected, interactionWidth }) {
   // pull each end in to the icon's edge so the cable touches the glyph, not its centre
   let px = sx, py = sy, qx = tx, qy = ty
   const seg = Math.hypot(tx - sx, ty - sy) || 1
-  const inS = half(s) - 6, inT = half(t) - 6
+  const inS = half(s) - 6, inT = half(tgt) - 6
   if (seg > inS + inT + 6) {
     const ex = (tx - sx) / seg, ey = (ty - sy) / seg
     px = sx + ex * inS; py = sy + ey * inS
@@ -253,7 +253,7 @@ function CenterEdge({ id, source, target, data, selected, interactionWidth }) {
   }
   const g = linkGeometry(px, py, qx, qy, data.shape, 46, data.bend)
   // an ethernet port with a status LED at both ends of the cable, sitting ON the icon's edge
-  const ports = [[sx, sy, g.dirs[0], data.aSt, data.a, half(s)], [tx, ty, g.dirs[1], data.bSt, data.b, half(t)]].map(([x, y, d, st, ifc, h]) => {
+  const ports = [[sx, sy, g.dirs[0], data.aSt, data.a, half(s)], [tx, ty, g.dirs[1], data.bSt, data.b, half(tgt)]].map(([x, y, d, st, ifc, h]) => {
     const [px, py] = portPoint(x, y, d, h - 7)
     return { px, py, ang: Math.atan2(d[1], d[0]) * 180 / Math.PI, st: portState(st), ifc }
   })
@@ -273,10 +273,10 @@ function CenterEdge({ id, source, target, data, selected, interactionWidth }) {
   const lab = (x, y, [dx, dy], h) => { const d = h + 20 + 16 * Math.max(0, dy); return [x + dx * d, y + dy * d] }
   const ifaceLabels = [
     [...lab(sx, sy, g.dirs[0], half(s)), data.a],
-    [...lab(tx, ty, g.dirs[1], half(t)), data.b],
+    [...lab(tx, ty, g.dirs[1], half(tgt)), data.b],
   ]
   const showIface = data.ifaceMode !== 'hover' || hv || selected
-  const extra = [data.label && ['name', data.label], data.cap && ['capb', '● cattura'], data.cond && long && ['cond', `⏱ ${data.cond}`]].filter(Boolean)
+  const extra = [data.label && ['name', data.label], data.cap && ['capb', t('labview.edge.capture')], data.cond && long && ['cond', `⏱ ${data.cond}`]].filter(Boolean)
   return (
     <>
       {selected && <path d={g.path} className="edge-halo" style={{ strokeWidth: w + 9 }} />}
@@ -286,7 +286,7 @@ function CenterEdge({ id, source, target, data, selected, interactionWidth }) {
         onMouseEnter={() => setHv(true)} onMouseLeave={() => setHv(false)} />
       {ports.map((p, i) => (
         <g key={i} className={`port st-${p.st} ${bothUp ? 'live' : ''}`} transform={`translate(${p.px} ${p.py}) rotate(${p.ang})`}>
-          <title>{`${p.ifc}: ${PORT_TITLE[p.st]}`}</title>
+          <title>{`${p.ifc}: ${t(`labview.port.${p.st}`)}`}</title>
           {/* a small RJ45 plug lying on the cable, its face plugged toward the node (−x), LED on the housing */}
           <path d="M-3 -2.6h5.4l1.6 1v3.2l-1.6 1H-3z" className="port-body" />
           <rect x="-3.2" y="-1.6" width="1.5" height="3.2" rx=".4" className="port-jack" />
@@ -312,6 +312,7 @@ const edgeTypes = { center: CenterEdge }
 
 // ------------------------------------------------------------- lab editor
 function Editor({ name, templates, onError, onBack, onReloadTemplates }) {
+  useLang()
   const [lab, setLab] = useState(null)
   const [state, setState] = useState(null)
   const [warnings, setWarnings] = useState([])
@@ -381,7 +382,7 @@ function Editor({ name, templates, onError, onBack, onReloadTemplates }) {
   const lastPointer = useRef(null) // last mouse position over the canvas, so new nodes land where you were looking
   const pendingSel = useRef(null) // names to select once freshly added nodes reach the canvas
 
-  const tplByName = useMemo(() => Object.fromEntries(templates.map((t) => [t.name, t])), [templates])
+  const tplByName = useMemo(() => Object.fromEntries(templates.map((tpl) => [tpl.name, tpl])), [templates])
   const running = state && Object.values(state.nodes || {}).some((n) => n.status === 'running')
   const selIds = rfNodes.filter((n) => n.selected && !n.id.startsWith(ANN)).map((n) => n.id)
   const selAnns = rfNodes.filter((n) => n.selected && n.id.startsWith(ANN)).map((n) => n.id.slice(ANN.length))
@@ -464,7 +465,7 @@ function Editor({ name, templates, onError, onBack, onReloadTemplates }) {
       const cap = caps.some((c) => c.running && l.endpoints.includes(`${c.node}:${c.iface}`))
       const tag = (node, port) => {
         const c = lab.nodes.find((n) => n.name === node)?.ports?.[port]
-        return c ? `${port} · ${c.mode === 'trunk' ? `trunk ${c.vlans || 'tutte'}` : `vlan ${c.vlan ?? 1}`}` : port
+        return c ? `${port} · ${c.mode === 'trunk' ? `trunk ${c.vlans || t('labview.allVlans')}` : `vlan ${c.vlan ?? 1}`}` : port
       }
       return {
         id: `l${i}`, source: a, target: b, type: 'center',
@@ -518,7 +519,7 @@ function Editor({ name, templates, onError, onBack, onReloadTemplates }) {
     inp.onchange = () => {
       const f = inp.files[0]
       if (!f) return
-      if (f.size > 2_000_000) return onError(new Error('Immagine troppo grande (max 2 MB)'))
+      if (f.size > 2_000_000) return onError(new Error(t('labview.err.imageTooBig')))
       const rd = new FileReader()
       rd.onload = () => {
         const img = new Image()
@@ -552,8 +553,8 @@ function Editor({ name, templates, onError, onBack, onReloadTemplates }) {
 
   const onConnect = ({ source, target }) => {
     if (!source || !target || source === target) return
-    if (!nextIface(lab, source) || !nextIface(lab, target)) return onError(new Error(`Nessuna interfaccia libera su ${!nextIface(lab, source) ? source : target}`))
-    if (SHARED.includes(tplOf(source)?.kind) && SHARED.includes(tplOf(target)?.kind)) return onError(new Error('Non puoi collegare tra loro due switch/reti (bridge, esterna, NAT)'))
+    if (!nextIface(lab, source) || !nextIface(lab, target)) return onError(new Error(t('labview.err.noFreeIface', { node: !nextIface(lab, source) ? source : target })))
+    if (SHARED.includes(tplOf(source)?.kind) && SHARED.includes(tplOf(target)?.kind)) return onError(new Error(t('labview.err.cantLinkNets')))
     setLinkDlg({ source, target })
   }
 
@@ -600,7 +601,7 @@ function Editor({ name, templates, onError, onBack, onReloadTemplates }) {
   const removeNodes = (names) => {
     const live = names.filter((n) => state?.nodes?.[n]?.status === 'running')
     const del = new Set(names.filter((n) => !live.includes(n)))
-    if (live.length) onError(new Error(`Ferma prima: ${live.join(', ')}`))
+    if (live.length) onError(new Error(t('labview.err.stopFirst', { nodes: live.join(', ') })))
     if (!del.size) return
     mutate((l) => {
       l.nodes = l.nodes.filter((n) => !del.has(n.name))
@@ -612,7 +613,7 @@ function Editor({ name, templates, onError, onBack, onReloadTemplates }) {
   const removeLink = (idx) => {
     setSelected(null)
     // hot-unplug: on a running lab the server tears the live wiring down (and saves the lab)
-    if (running) return run('Scollego il cavo…', () => api(`/labs/${name}/links/disconnect`, { method: 'POST', body: { index: idx } }))
+    if (running) return run(t('labview.busy.disconnecting'), () => api(`/labs/${name}/links/disconnect`, { method: 'POST', body: { index: idx } }))
     mutate((l) => l.links.splice(idx, 1))
   }
 
@@ -638,12 +639,12 @@ function Editor({ name, templates, onError, onBack, onReloadTemplates }) {
     try { await fn() } catch (e) { onError(e) } finally { setBusy(''); await load() }
   }
 
-  const deploy = () => readOnly ? onError(new Error('Lab in sola lettura')) : run('Avvio in corso…', async () => {
+  const deploy = () => readOnly ? onError(new Error(t('labview.err.readOnly'))) : run(t('labview.busy.deploying'), async () => {
     if (dirty && !(await save())) return
     const st = await api(`/labs/${name}/deploy`, { method: 'POST' })
     if (st.error) onError(new Error(st.error))
   })
-  const destroy = () => run('Arresto in corso…', async () => {
+  const destroy = () => run(t('labview.busy.stopping'), async () => {
     setConsoles([]); setActiveConsole(null); setWsWins([])
     await api(`/labs/${name}/destroy`, { method: 'POST' })
     loadCaps()
@@ -651,11 +652,11 @@ function Editor({ name, templates, onError, onBack, onReloadTemplates }) {
 
   // start / stop / wipe one or more nodes, skipping the ones where the action makes no sense
   const bulk = (nodes, action) => {
-    if (readOnly) return onError(new Error('Lab in sola lettura: chiedi al proprietario il permesso di modifica'))
+    if (readOnly) return onError(new Error(t('labview.err.readOnlyAsk')))
     const list = nodes.filter((n) => canDo(tplOf(n), state?.nodes?.[n], action))
     if (!list.length) return
-    if (action === 'wipe' && !confirm(`Azzerare i dischi di ${list.join(', ')}? Tutte le modifiche andranno perse.`)) return
-    return run(`${ACTION_LABEL[action]} ${list.length === 1 ? list[0] : `${list.length} nodi`}…`, async () => {
+    if (action === 'wipe' && !confirm(t('labview.confirm.wipe', { nodes: list.join(', ') }))) return
+    return run(`${t(`labview.action.${action}`)} ${list.length === 1 ? list[0] : t('labview.nNodesCount', { n: list.length })}…`, async () => {
       if (action === 'start' && dirty && !(await save())) return
       const errs = []
       for (const n of list) {
@@ -671,14 +672,14 @@ function Editor({ name, templates, onError, onBack, onReloadTemplates }) {
     try {
       const r = await api(`/labs/${name}/configs`)
       const text = r.sets?.[r.active]?.[node]
-      if (!text) throw new Error(`Nessuna startup config per ${node} nel set "${r.active}"`)
+      if (!text) throw new Error(t('labview.err.noStartupConfig', { node, set: r.active }))
       const a = document.createElement('a')
       a.href = URL.createObjectURL(new Blob([text], { type: 'text/plain' })); a.download = `${name}_${node}.cfg`; a.click()
       setTimeout(() => URL.revokeObjectURL(a.href), 2000)
     } catch (e) { onError(e) }
   }
 
-  const applyConditioning = () => run('Applico condizionamento…', async () => {
+  const applyConditioning = () => run(t('labview.busy.conditioning'), async () => {
     if (dirty && !(await save())) return
     await api(`/labs/${name}/conditioning`, { method: 'POST' })
   })
@@ -713,7 +714,7 @@ function Editor({ name, templates, onError, onBack, onReloadTemplates }) {
     // graphical consoles: a browser popup in dock mode; in window mode VNC stays in-page as a floating window
     const asPopup = (n) => { const k = consoleKind(state.nodes[n]); return POPUP_KINDS.includes(k) && !(consoleMode === 'window' && k === 'vnc') }
     list.filter(asPopup).forEach((n) => {
-      if (!openConsoleWindow(name, n)) onError(new Error('Il browser ha bloccato la finestra: consenti i popup per NetSO'))
+      if (!openConsoleWindow(name, n)) onError(new Error(t('labview.err.popupBlocked')))
     })
     list = list.filter((n) => !asPopup(n))
     if (!list.length) return
@@ -787,7 +788,7 @@ function Editor({ name, templates, onError, onBack, onReloadTemplates }) {
     const list = nodes.map((n) => ({ n, g: nativeConsole(state?.nodes?.[n]), t: termTarget(state?.nodes?.[n], tplOf(n)) }))
     const graphical = list.filter((x) => !x.t && x.g)  // VNC/SPICE/RDP: the OS viewer via its URI
     const terminals = list.filter((x) => x.t)           // telnet/ssh: a launcher the PC terminal runs
-    if (!graphical.length && !terminals.length) { onError(new Error('Nessuna consolle esterna disponibile per questo nodo')); return }
+    if (!graphical.length && !terminals.length) { onError(new Error(t('labview.err.noExternalConsole'))); return }
     graphical.forEach(({ g }, i) => setTimeout(() => {
       const a = document.createElement('a'); a.href = g.uri; a.rel = 'noreferrer'; a.click()
     }, i * 400))
@@ -802,15 +803,15 @@ function Editor({ name, templates, onError, onBack, onReloadTemplates }) {
 
   // scarica l'immagine Docker di un nodo container direttamente dal lab (job con avanzamento)
   const nodeImage = (n) => { const x = lab.nodes.find((y) => y.name === n); return x?.image || tplOf(n)?.image }
-  const needsImage = (n) => { const t = tplOf(n); return t?.kind === 'docker' && t.ready === false }
+  const needsImage = (n) => { const tp = tplOf(n); return tp?.kind === 'docker' && tp.ready === false }
   const pullImage = async (ref) => {
     if (!ref || pulls.some((p) => p.ref === ref && p.status === 'running')) return
     const pid = cid()
-    setPulls((p) => [...p, { id: pid, ref, status: 'running', message: 'Avvio…' }])
+    setPulls((p) => [...p, { id: pid, ref, status: 'running', message: t('labview.pull.starting') }])
     try {
       const { job } = await api('/images/docker/pull', { method: 'POST', body: { ref } })
-      const j = await waitJob(job, (t) => setPulls((p) => p.map((x) => (x.id === pid ? { ...x, message: t.message || 'In corso…' } : x))))
-      setPulls((p) => p.map((x) => (x.id === pid ? { ...x, status: j.status, message: j.status === 'done' ? 'Scaricata' : (j.error || j.message || 'Errore') } : x)))
+      const j = await waitJob(job, (prog) => setPulls((p) => p.map((x) => (x.id === pid ? { ...x, message: prog.message || t('labview.pull.inProgress') } : x))))
+      setPulls((p) => p.map((x) => (x.id === pid ? { ...x, status: j.status, message: j.status === 'done' ? t('labview.pull.done') : (j.error || j.message || t('labview.pull.error')) } : x)))
       if (j.status === 'done') { onReloadTemplates?.(); load() }
       setTimeout(() => setPulls((p) => p.filter((x) => x.id !== pid)), 5000)
     } catch (e) { onError(e); setPulls((p) => p.filter((x) => x.id !== pid)) }
@@ -844,7 +845,7 @@ function Editor({ name, templates, onError, onBack, onReloadTemplates }) {
   }
   const wsMenu = (eps) => eps.filter((e) => isVm(tplOf(splitEp(e)[0]))).map((e) => {
     const [n, i] = splitEp(e)
-    return { icon: 'capture', label: `Wireshark su ${n} ${i}`, disabled: state?.nodes?.[n]?.status !== 'running', onClick: () => openWireshark(n, i) }
+    return { icon: 'capture', label: `${t('labview.wiresharkNode', { n })} ${i}`, disabled: state?.nodes?.[n]?.status !== 'running', onClick: () => openWireshark(n, i) }
   })
 
   const openYaml = async () => {
@@ -861,15 +862,15 @@ function Editor({ name, templates, onError, onBack, onReloadTemplates }) {
 
   const fit = () => flow.fitView({ padding: 0.3, maxZoom: 1.2, duration: 300 })
   const close = async () => {
-    if (dirty && !readOnly && !(await save(true)) && !confirm('Salvataggio non riuscito: uscire perdendo le modifiche?')) return
+    if (dirty && !readOnly && !(await save(true)) && !confirm(t('labview.confirm.saveFailed'))) return
     onBack()
   }
 
   // autosave: persist edits a moment after they happen, so nothing is lost if you leave without pressing Salva
   useEffect(() => {
     if (!dirty || readOnly) return
-    const t = setTimeout(() => save(true), 1000)
-    return () => clearTimeout(t)
+    const tm = setTimeout(() => save(true), 1000)
+    return () => clearTimeout(tm)
   }, [dirty, lab, readOnly]) // eslint-disable-line react-hooks/exhaustive-deps
   // last resort: a hard reload/tab-close within that second still warns instead of silently dropping changes
   useEffect(() => {
@@ -892,10 +893,10 @@ function Editor({ name, templates, onError, onBack, onReloadTemplates }) {
     return () => window.removeEventListener('keydown', onKey)
   })
 
-  if (!lab) return <div className="empty">Caricamento…</div>
+  if (!lab) return <div className="empty">{t('labview.loading')}</div>
 
   const allNames = lab.nodes.map((n) => n.name)
-  const sharedTpls = templates.filter((t) => SHARED.includes(t.kind))
+  const sharedTpls = templates.filter((tpl) => SHARED.includes(tpl.kind))
 
   // ---------------------------------------------------------- right-click menus
   const buildMenu = () => {
@@ -903,49 +904,49 @@ function Editor({ name, templates, onError, onBack, onReloadTemplates }) {
     if (menu.kind === 'pane') {
       return {
         items: [
-          { icon: 'plus', label: 'Nodo', disabled: locked, onClick: () => setAddDlg({ pos: menu.pos, at: { x: menu.x, y: menu.y } }) },
-          { icon: 'links', label: 'Rete', disabled: locked, sub: sharedTpls.map((t) => ({ dev: t.icon, label: tplTitle(t), onClick: () => addNodes({ tpl: t.name }, menu.pos) })) },
-          { icon: 'save', label: 'Immagine', disabled: locked, onClick: () => addDrawing('image', { x: menu.pos.x + 43, y: menu.pos.y + 29 }) },
-          { icon: 'edit', label: 'Testo', disabled: locked, onClick: () => addDrawing('text', { x: menu.pos.x + 43, y: menu.pos.y + 29 }) },
-          { icon: 'chev', label: 'Linea', disabled: locked, onClick: () => addDrawing('line', { x: menu.pos.x + 43, y: menu.pos.y + 29 }) },
-          { icon: 'stop', label: 'Forma', disabled: locked, sub: [
-            { icon: 'stop', label: 'Rettangolo', onClick: () => addDrawing('rect', { x: menu.pos.x + 43, y: menu.pos.y + 29 }) },
-            { icon: 'info', label: 'Ellisse', onClick: () => addDrawing('ellipse', { x: menu.pos.x + 43, y: menu.pos.y + 29 }) },
+          { icon: 'plus', label: t('labview.menu.node'), disabled: locked, onClick: () => setAddDlg({ pos: menu.pos, at: { x: menu.x, y: menu.y } }) },
+          { icon: 'links', label: t('labview.menu.network'), disabled: locked, sub: sharedTpls.map((tpl) => ({ dev: tpl.icon, label: tplTitle(tpl), onClick: () => addNodes({ tpl: tpl.name }, menu.pos) })) },
+          { icon: 'save', label: t('labview.image'), disabled: locked, onClick: () => addDrawing('image', { x: menu.pos.x + 43, y: menu.pos.y + 29 }) },
+          { icon: 'edit', label: t('labview.text'), disabled: locked, onClick: () => addDrawing('text', { x: menu.pos.x + 43, y: menu.pos.y + 29 }) },
+          { icon: 'chev', label: t('labview.line'), disabled: locked, onClick: () => addDrawing('line', { x: menu.pos.x + 43, y: menu.pos.y + 29 }) },
+          { icon: 'stop', label: t('labview.shape'), disabled: locked, sub: [
+            { icon: 'stop', label: t('labview.ann.rect'), onClick: () => addDrawing('rect', { x: menu.pos.x + 43, y: menu.pos.y + 29 }) },
+            { icon: 'info', label: t('labview.ann.ellipse'), onClick: () => addDrawing('ellipse', { x: menu.pos.x + 43, y: menu.pos.y + 29 }) },
           ] },
           { sep: true },
-          lab.nodes.some((n) => needsImage(n.name)) && { icon: 'download', label: `Scarica immagini mancanti (${new Set(lab.nodes.map((n) => n.name).filter(needsImage).map(nodeImage)).size})`, onClick: pullMissing },
-          { icon: 'play', label: 'Nodi', sub: [
-            { icon: 'play', label: 'Avvia tutti', onClick: () => bulk(allNames, 'start') },
-            { icon: 'stop', label: 'Ferma tutti', onClick: () => bulk(allNames, 'stop') },
-            { icon: 'console', label: 'Apri tutte le consolle', onClick: () => openConsoles(allNames) },
-            { icon: 'config', label: 'Startup config', onClick: () => setCfgDlg({}) },
+          lab.nodes.some((n) => needsImage(n.name)) && { icon: 'download', label: t('labview.menu.pullMissing', { n: new Set(lab.nodes.map((n) => n.name).filter(needsImage).map(nodeImage)).size }), onClick: pullMissing },
+          { icon: 'play', label: t('labview.menu.nodes'), sub: [
+            { icon: 'play', label: t('labview.startAll'), onClick: () => bulk(allNames, 'start') },
+            { icon: 'stop', label: t('labview.stopAll'), onClick: () => bulk(allNames, 'stop') },
+            { icon: 'console', label: t('labview.openAllConsoles'), onClick: () => openConsoles(allNames) },
+            { icon: 'config', label: t('labview.startupConfig'), onClick: () => setCfgDlg({}) },
           ] },
-          { icon: 'fit', label: 'Disponi', disabled: locked || !lab.nodes.length, sub: [
-            { icon: 'fit', label: 'A livelli', onClick: () => arrange('layers') },
-            { icon: 'refresh', label: 'In cerchio', onClick: () => arrange('circle') },
-            { icon: 'nodes', label: 'A griglia', onClick: () => arrange('grid') },
-            { icon: 'links', label: 'Genera topologia…', onClick: () => setAutoDlg({ kind: 'gen', origin: menu.pos }) },
+          { icon: 'fit', label: t('labview.arrange'), disabled: locked || !lab.nodes.length, sub: [
+            { icon: 'fit', label: t('labview.arrange.layers'), onClick: () => arrange('layers') },
+            { icon: 'refresh', label: t('labview.arrange.circle'), onClick: () => arrange('circle') },
+            { icon: 'nodes', label: t('labview.arrange.grid'), onClick: () => arrange('grid') },
+            { icon: 'links', label: t('labview.generateTopology'), onClick: () => setAutoDlg({ kind: 'gen', origin: menu.pos }) },
           ] },
           { sep: true },
-          { icon: 'select', label: 'Seleziona tutto', kbd: '⌘A', onClick: selectAll },
-          { icon: 'save', label: 'Salva', kbd: '⌘S', disabled: !dirty, onClick: () => save() },
+          { icon: 'select', label: t('labview.selectAll'), kbd: '⌘A', onClick: selectAll },
+          { icon: 'save', label: t('common.save'), kbd: '⌘S', disabled: !dirty, onClick: () => save() },
         ],
       }
     }
-    if (menu.kind === 'more') return { title: 'Altre azioni', icon: 'more', items: moreItems }
+    if (menu.kind === 'more') return { title: t('labview.moreActions'), icon: 'more', items: moreItems }
     if (menu.kind === 'ann') {
       const a = (lab.annotations || []).find((x) => x.id === menu.id)
       if (!a) return null
-      const label = Object.fromEntries(ANN_TYPES.map(([t, l]) => [t, l]))[a.type]
+      const label = t(`labview.ann.${a.type}`)
       return {
         title: label, icon: 'edit',
         items: [
-          { icon: 'edit', label: 'Modifica (pannello a destra)', onClick: () => setSelected({ type: 'ann', id: a.id }) },
-          a.z < 0 ? { icon: 'deploy', label: 'Porta sopra i dispositivi', disabled: locked, onClick: () => updateAnn(a.id, { z: 1 }) }
-            : { icon: 'download', label: 'Porta dietro i dispositivi', disabled: locked, onClick: () => updateAnn(a.id, { z: -1 }) },
-          { icon: 'copy', label: 'Duplica', disabled: locked, onClick: () => duplicateAnn(a.id) },
+          { icon: 'edit', label: t('labview.ann.editPanel'), onClick: () => setSelected({ type: 'ann', id: a.id }) },
+          a.z < 0 ? { icon: 'deploy', label: t('labview.ann.toFront'), disabled: locked, onClick: () => updateAnn(a.id, { z: 1 }) }
+            : { icon: 'download', label: t('labview.ann.toBack'), disabled: locked, onClick: () => updateAnn(a.id, { z: -1 }) },
+          { icon: 'copy', label: t('labview.duplicate'), disabled: locked, onClick: () => duplicateAnn(a.id) },
           { sep: true },
-          { icon: 'trash', label: 'Elimina', kbd: '⌫', danger: true, disabled: locked, onClick: () => removeAnns([a.id]) },
+          { icon: 'trash', label: t('common.delete'), kbd: '⌫', danger: true, disabled: locked, onClick: () => removeAnns([a.id]) },
         ],
       }
     }
@@ -956,45 +957,45 @@ function Editor({ name, templates, onError, onBack, onReloadTemplates }) {
       return {
         title: n, dev: node.icon || tpl?.icon, sub: tpl?.name,
         items: [
-          isVm(tpl) && { icon: 'play', label: 'Avvia', cls: 'go', disabled: up || !!pending[n], onClick: () => nodeAction(n, 'start') },
-          isVm(tpl) && { icon: 'stop', label: 'Ferma', cls: 'stop', disabled: !up || !!pending[n], onClick: () => nodeAction(n, 'stop') },
-          isVm(tpl) && { icon: 'console', label: 'Consolle', disabled: !canDo(tpl, ns, 'console'), onClick: () => openConsole(n) },
-          isVm(tpl) && up && (termTarget(ns, tpl) || nativeConsole(ns)) && { icon: 'expand', label: termTarget(ns, tpl) ? 'Consolle nel terminale del PC' : `Consolle esterna (${nativeConsole(ns).app})`, onClick: () => openNative([n]) },
-          needsImage(n) && { icon: 'download', label: 'Scarica immagine Docker', disabled: pulls.some((p) => p.ref === nodeImage(n) && p.status === 'running'), onClick: () => pullImage(nodeImage(n)) },
-          hasDisks(tpl) && { icon: 'wipe', label: 'Azzera dischi (wipe)', disabled: !canDo(tpl, ns, 'wipe'), onClick: () => nodeAction(n, 'wipe') },
+          isVm(tpl) && { icon: 'play', label: t('labview.start'), cls: 'go', disabled: up || !!pending[n], onClick: () => nodeAction(n, 'start') },
+          isVm(tpl) && { icon: 'stop', label: t('labview.stop'), cls: 'stop', disabled: !up || !!pending[n], onClick: () => nodeAction(n, 'stop') },
+          isVm(tpl) && { icon: 'console', label: t('labview.console'), disabled: !canDo(tpl, ns, 'console'), onClick: () => openConsole(n) },
+          isVm(tpl) && up && (termTarget(ns, tpl) || nativeConsole(ns)) && { icon: 'expand', label: termTarget(ns, tpl) ? t('labview.consoleInPcTerminal') : t('labview.externalConsole', { app: nativeConsole(ns).app }), onClick: () => openNative([n]) },
+          needsImage(n) && { icon: 'download', label: t('labview.pullDockerImage'), disabled: pulls.some((p) => p.ref === nodeImage(n) && p.status === 'running'), onClick: () => pullImage(nodeImage(n)) },
+          hasDisks(tpl) && { icon: 'wipe', label: t('labview.wipeDisks'), disabled: !canDo(tpl, ns, 'wipe'), onClick: () => nodeAction(n, 'wipe') },
           isVm(tpl) && { sep: true },
-          { icon: node.pinned ? 'unlock' : 'lock', label: node.pinned ? 'Sblocca posizione' : 'Blocca posizione', disabled: locked,
+          { icon: node.pinned ? 'unlock' : 'lock', label: node.pinned ? t('labview.unpinPos') : t('labview.pinPos'), disabled: locked,
             onClick: () => mutate((l) => { const x = l.nodes.find((y) => y.name === n); if (x.pinned) delete x.pinned; else x.pinned = true }) },
           { render: () => <SizeRow value={node.size || 100} disabled={locked}
             onChange={(v) => mutate((l) => { const x = l.nodes.find((y) => y.name === n); if (v === 100) delete x.size; else x.size = v })} /> },
-          isVm(tpl) && { icon: 'config', label: 'Config', sub: [
-            { icon: 'config', label: 'Startup config…', onClick: () => setCfgDlg({ node: n }) },
-            { icon: 'save', label: 'Salva dal dispositivo…', disabled: !up, onClick: () => setAutoDlg({ kind: 'save', nodes: [n] }) },
-            { icon: 'download', label: 'Esporta', onClick: () => exportNodeConfig(n) },
+          isVm(tpl) && { icon: 'config', label: t('labview.config'), sub: [
+            { icon: 'config', label: t('labview.startupConfigDots'), onClick: () => setCfgDlg({ node: n }) },
+            { icon: 'save', label: t('labview.saveFromDevice'), disabled: !up, onClick: () => setAutoDlg({ kind: 'save', nodes: [n] }) },
+            { icon: 'download', label: t('labview.export'), onClick: () => exportNodeConfig(n) },
           ] },
-          isVm(tpl) && usedIfaces(lab, n).size > 0 && { icon: 'capture', label: 'Cattura', sub: [
+          isVm(tpl) && usedIfaces(lab, n).size > 0 && { icon: 'capture', label: t('labview.capture'), sub: [
             ...wsMenu([...usedIfaces(lab, n)].map((i) => `${n}:${i}`)),
-            { icon: 'nodes', label: 'Tabella pacchetti…', disabled: !up, onClick: () => setCapDlg({ node: n }) },
+            { icon: 'nodes', label: t('labview.packetTable'), disabled: !up, onClick: () => setCapDlg({ node: n }) },
           ] },
           { sep: true },
-          { icon: 'edit', label: 'Modifica…', kbd: '↵', onClick: () => setEditNode(n) },
-          { icon: 'copy', label: 'Duplica', disabled: locked, onClick: () => duplicateNode(n) },
-          { icon: 'trash', label: 'Elimina', kbd: '⌫', danger: true, disabled: up || locked, onClick: () => removeNodes([n]) },
+          { icon: 'edit', label: t('labview.editDots'), kbd: '↵', onClick: () => setEditNode(n) },
+          { icon: 'copy', label: t('labview.duplicate'), disabled: locked, onClick: () => duplicateNode(n) },
+          { icon: 'trash', label: t('common.delete'), kbd: '⌫', danger: true, disabled: up || locked, onClick: () => removeNodes([n]) },
         ],
       }
     }
     if (menu.kind === 'selection') {
       const ids = selIds
       return {
-        title: `${ids.length} nodi selezionati`, icon: 'nodes',
+        title: t('labview.nNodesSelected', { n: ids.length }), icon: 'nodes',
         items: [
-          { icon: 'play', label: 'Avvia selezionati', onClick: () => bulk(ids, 'start') },
-          { icon: 'stop', label: 'Ferma selezionati', onClick: () => bulk(ids, 'stop') },
-          { icon: 'console', label: 'Apri consolle', onClick: () => openConsoles(ids) },
-          { icon: 'expand', label: 'Consolle nel terminale del PC', onClick: () => openNative(ids) },
-          { icon: 'wipe', label: 'Azzera selezionati', onClick: () => bulk(ids, 'wipe') },
+          { icon: 'play', label: t('labview.startSelected'), onClick: () => bulk(ids, 'start') },
+          { icon: 'stop', label: t('labview.stopSelected'), onClick: () => bulk(ids, 'stop') },
+          { icon: 'console', label: t('labview.openConsoles'), onClick: () => openConsoles(ids) },
+          { icon: 'expand', label: t('labview.consoleInPcTerminal'), onClick: () => openNative(ids) },
+          { icon: 'wipe', label: t('labview.wipeSelected'), onClick: () => bulk(ids, 'wipe') },
           { sep: true },
-          { icon: 'trash', label: 'Elimina selezionati', danger: true, disabled: locked, onClick: () => removeNodes(ids) },
+          { icon: 'trash', label: t('labview.deleteSelected'), danger: true, disabled: locked, onClick: () => removeNodes(ids) },
         ],
       }
     }
@@ -1004,20 +1005,20 @@ function Editor({ name, templates, onError, onBack, onReloadTemplates }) {
       return {
         title: `${splitEp(l.endpoints[0])[0]} ⟷ ${splitEp(l.endpoints[1])[0]}`, icon: 'links',
         items: [
-          { icon: 'edit', label: 'Modifica e aspetto (colore, linea)…', onClick: () => setSelected({ type: 'edge', id: menu.id }) },
-          { icon: 'links', label: 'Tipo linea', disabled: locked, sub: LINE_TYPES.map(([k, label]) => ({
-            label: `${label}${(l.style || 'solid') === k ? '  ✓' : ''}`,
+          { icon: 'edit', label: t('labview.editAppearance'), onClick: () => setSelected({ type: 'edge', id: menu.id }) },
+          { icon: 'links', label: t('labview.lineType'), disabled: locked, sub: LINE_TYPES.map(([k, label]) => ({
+            label: `${t(label)}${(l.style || 'solid') === k ? '  ✓' : ''}`,
             onClick: () => mutate((lk) => { const ln = lk.links[idx]; if (k === 'solid') delete ln.style; else ln.style = k }) })) },
-          { icon: 'links', label: 'Forma linea', disabled: locked, sub: LINE_SHAPES.map(([k, label]) => ({
-            label: `${label}${(l.shape || 'straight') === k ? '  ✓' : ''}`,
+          { icon: 'links', label: t('labview.lineShape'), disabled: locked, sub: LINE_SHAPES.map(([k, label]) => ({
+            label: `${t(label)}${(l.shape || 'straight') === k ? '  ✓' : ''}`,
             onClick: () => mutate((lk) => { const ln = lk.links[idx]; if (k === 'straight') delete ln.shape; else ln.shape = k }) })) },
-          running && { icon: 'bolt', label: 'Applica condizionamento', onClick: applyConditioning },
-          { icon: 'capture', label: 'Cattura', sub: [
+          running && { icon: 'bolt', label: t('labview.applyConditioning'), onClick: applyConditioning },
+          { icon: 'capture', label: t('labview.capture'), sub: [
             ...wsMenu(l.endpoints),
-            { icon: 'nodes', label: 'Tabella pacchetti…', onClick: () => { const e = l.endpoints.find((x) => isVm(tplOf(splitEp(x)[0]))); setCapDlg(e ? { node: splitEp(e)[0], iface: splitEp(e)[1] } : {}) } },
+            { icon: 'nodes', label: t('labview.packetTable'), onClick: () => { const e = l.endpoints.find((x) => isVm(tplOf(splitEp(x)[0]))); setCapDlg(e ? { node: splitEp(e)[0], iface: splitEp(e)[1] } : {}) } },
           ] },
           { sep: true },
-          { icon: 'trash', label: 'Elimina', danger: true, disabled: locked, onClick: () => removeLink(idx) },
+          { icon: 'trash', label: t('common.delete'), danger: true, disabled: locked, onClick: () => removeLink(idx) },
         ],
       }
     }
@@ -1026,42 +1027,42 @@ function Editor({ name, templates, onError, onBack, onReloadTemplates }) {
 
   // ---------------------------------------------------------- "more" menu of the top bar
   const moreItems = [
-    { icon: 'save', label: dirty ? 'Salva ora' : 'Tutto salvato', disabled: readOnly || !dirty, onClick: () => save() },
+    { icon: 'save', label: dirty ? t('labview.saveNow') : t('labview.allSaved'), disabled: readOnly || !dirty, onClick: () => save() },
     { sep: true },
-    { icon: 'nodes', label: 'Lab', sub: [
-      { icon: 'wipe', label: 'Azzera tutti i nodi', onClick: () => bulk(allNames, 'wipe') },
-      { icon: 'console', label: 'Apri tutte le consolle', onClick: () => openConsoles(allNames) },
-      { icon: 'bolt', label: 'Applica condizionamento', disabled: !running, onClick: applyConditioning },
-      { icon: locked ? 'unlock' : 'lock', label: locked ? 'Sblocca lab' : 'Blocca lab', onClick: () => setLocked((v) => !v) },
-      { icon: 'refresh', label: 'Ricarica dal server', onClick: () => (!dirty || confirm('Scartare le modifiche non salvate?')) && load() },
-      { icon: 'info', label: 'Dettagli', onClick: () => setListDlg('details') },
-      { icon: 'copy', label: 'Istantanee…', onClick: () => setSnapDlg(true) },
+    { icon: 'nodes', label: t('labview.lab'), sub: [
+      { icon: 'wipe', label: t('labview.wipeAllNodes'), onClick: () => bulk(allNames, 'wipe') },
+      { icon: 'console', label: t('labview.openAllConsoles'), onClick: () => openConsoles(allNames) },
+      { icon: 'bolt', label: t('labview.applyConditioning'), disabled: !running, onClick: applyConditioning },
+      { icon: locked ? 'unlock' : 'lock', label: locked ? t('labview.unlockLab') : t('labview.lockLab'), onClick: () => setLocked((v) => !v) },
+      { icon: 'refresh', label: t('labview.reloadFromServer'), onClick: () => (!dirty || confirm(t('labview.confirm.discard'))) && load() },
+      { icon: 'info', label: t('labview.details'), onClick: () => setListDlg('details') },
+      { icon: 'copy', label: t('labview.snapshots'), onClick: () => setSnapDlg(true) },
     ] },
-    { icon: 'links', label: 'Automazione', sub: [
-      { icon: 'download', label: 'Salva config dai dispositivi…', onClick: () => setAutoDlg({ kind: 'save' }) },
-      { icon: 'nodes', label: 'Inventario (Ansible, SSH)…', onClick: () => setAutoDlg({ kind: 'inv' }) },
-      { icon: 'links', label: 'Genera topologia…', disabled: locked, onClick: () => setAutoDlg({ kind: 'gen', origin: viewCenter() }) },
-      { icon: 'fit', label: 'Disponi a livelli', disabled: locked, onClick: () => arrange('layers') },
-      { icon: 'refresh', label: 'Disponi in cerchio', disabled: locked, onClick: () => arrange('circle') },
-      { icon: 'nodes', label: 'Disponi a griglia', disabled: locked, onClick: () => arrange('grid') },
+    { icon: 'links', label: t('labview.automation'), sub: [
+      { icon: 'download', label: t('labview.saveConfigsFromDevices'), onClick: () => setAutoDlg({ kind: 'save' }) },
+      { icon: 'nodes', label: t('labview.inventory'), onClick: () => setAutoDlg({ kind: 'inv' }) },
+      { icon: 'links', label: t('labview.generateTopology'), disabled: locked, onClick: () => setAutoDlg({ kind: 'gen', origin: viewCenter() }) },
+      { icon: 'fit', label: t('labview.arrangeLayers'), disabled: locked, onClick: () => arrange('layers') },
+      { icon: 'refresh', label: t('labview.arrangeCircle'), disabled: locked, onClick: () => arrange('circle') },
+      { icon: 'nodes', label: t('labview.arrangeGrid'), disabled: locked, onClick: () => arrange('grid') },
     ] },
-    { icon: 'code', label: 'File', sub: [
-      { icon: 'code', label: 'Modifica YAML', onClick: openYaml },
-      ...EXPORT_FORMATS.map((f) => ({ icon: f.icon, label: `Esporta ${f.label}`, onClick: async () => { if (dirty && !(await save())) return; downloadExport(name, f.id) } })),
+    { icon: 'code', label: t('labview.file'), sub: [
+      { icon: 'code', label: t('labview.editYaml'), onClick: openYaml },
+      ...EXPORT_FORMATS.map((f) => ({ icon: f.icon, label: t('labview.exportFmt', { fmt: f.label }), onClick: async () => { if (dirty && !(await save())) return; downloadExport(name, f.id) } })),
     ] },
-    { dev: 'router', label: 'Icone', sub: [
-      { dev: 'router', label: `Moderne${iconStyle === 'modern' ? '  ✓' : ''}`, onClick: () => setIconStyle('modern') },
-      { dev: 'router', label: `Classiche 3D${iconStyle === 'classic' ? '  ✓' : ''}`, onClick: () => setIconStyle('classic') },
-      { dev: 'router', label: `NetSO Line${iconStyle === 'line' ? '  ✓' : ''}`, onClick: () => setIconStyle('line') },
-      { dev: 'router', label: `NetSO Rack${iconStyle === 'rack' ? '  ✓' : ''}`, onClick: () => setIconStyle('rack') },
+    { dev: 'router', label: t('labview.icons'), sub: [
+      { dev: 'router', label: `${t('nav.iconsModern')}${iconStyle === 'modern' ? '  ✓' : ''}`, onClick: () => setIconStyle('modern') },
+      { dev: 'router', label: `${t('nav.iconsClassic')}${iconStyle === 'classic' ? '  ✓' : ''}`, onClick: () => setIconStyle('classic') },
+      { dev: 'router', label: `${t('nav.iconsLine')}${iconStyle === 'line' ? '  ✓' : ''}`, onClick: () => setIconStyle('line') },
+      { dev: 'router', label: `${t('nav.iconsRack')}${iconStyle === 'rack' ? '  ✓' : ''}`, onClick: () => setIconStyle('rack') },
     ] },
-    { icon: 'fit', label: 'Vista', sub: [
-      { icon: 'links', label: `Nomi interfacce: ${ifaceLabels === 'always' ? 'sempre' : 'al passaggio'}`, onClick: () => setIfaceLabels((v) => (v === 'always' ? 'hover' : 'always')) },
-      { icon: 'status', label: 'Stato del server', onClick: () => setListDlg('status') },
+    { icon: 'fit', label: t('labview.view'), sub: [
+      { icon: 'links', label: `${t('labview.ifaceNames')}: ${ifaceLabels === 'always' ? t('labview.always') : t('labview.onHover')}`, onClick: () => setIfaceLabels((v) => (v === 'always' ? 'hover' : 'always')) },
+      { icon: 'status', label: t('nav.serverStatus'), onClick: () => setListDlg('status') },
     ] },
     { sep: true },
-    { icon: 'destroy', label: 'Destroy lab', danger: true, disabled: !running || !!busy, onClick: () => confirm('Fermare tutti i nodi e rimuovere le reti del lab?') && destroy() },
-    { icon: 'exit', label: 'Chiudi lab', onClick: close },
+    { icon: 'destroy', label: t('labview.destroyLab'), danger: true, disabled: !running || !!busy, onClick: () => confirm(t('labview.confirm.destroy')) && destroy() },
+    { icon: 'exit', label: t('labview.closeLab'), onClick: close },
   ]
   const arrange = (mode) => {
     const pos = autoLayout(lab, mode, (n) => tplOf(n)?.kind)
@@ -1103,39 +1104,39 @@ function Editor({ name, templates, onError, onBack, onReloadTemplates }) {
     <div className={`editor ${consoles.length && consoleMode === 'dock' ? 'has-dock' : ''} labels-${ifaceLabels}`}>
       <header className="ed-top">
         <div className="ed-left">
-          <button className="icon-btn" title="Torna al Workspace" onClick={close}><Ui name="back" /></button>
-          <button className="lab-name" title="Dettagli del lab" onClick={() => setListDlg('details')}>{lab.name}</button>
-          <span className={`pill ${state?.status}`}>{state?.status === 'running' ? 'avviato' : state?.status === 'error' ? 'errore' : 'fermo'}</span>
-          {dirty && <span className="pill dirty">non salvato</span>}
-          {readOnly ? <span className="pill"><Ui name="lock" size={11} /> sola lettura</span>
-            : locked && <span className="pill"><Ui name="lock" size={11} /> bloccato</span>}
+          <button className="icon-btn" title={t('labview.backToWorkspace')} onClick={close}><Ui name="back" /></button>
+          <button className="lab-name" title={t('labview.labDetails')} onClick={() => setListDlg('details')}>{lab.name}</button>
+          <span className={`pill ${state?.status}`}>{state?.status === 'running' ? t('labview.pill.running') : state?.status === 'error' ? t('labview.pill.error') : t('labview.pill.stopped')}</span>
+          {dirty && <span className="pill dirty">{t('labview.pill.unsaved')}</span>}
+          {readOnly ? <span className="pill"><Ui name="lock" size={11} /> {t('labview.pill.readOnly')}</span>
+            : locked && <span className="pill"><Ui name="lock" size={11} /> {t('labview.pill.locked')}</span>}
         </div>
 
         <nav className="ed-tools">
           <div className="seg">
-            <TopBtn icon="plus" label="Nodo" title="Aggiungi nodi (scegli template e quantità)" disabled={locked} onClick={() => setAddDlg({ pos: dropPos(), at: lastPointer.current })} />
-            <TopBtn icon="nodes" label="Nodi" title="Tabella dei nodi" onClick={() => setListDlg('nodes')} />
-            <TopBtn icon="links" label="Collegamenti" title="Tabella dei collegamenti" onClick={() => setListDlg('links')} />
-            <TopBtn icon="config" label="Config" title="Startup config" onClick={() => setCfgDlg({})} />
-            <TopBtn icon="capture" label="Cattura" title="Cattura pacchetti / Wireshark" badge={caps.some((c) => c.running)} onClick={() => setCapDlg({})} />
+            <TopBtn icon="plus" label={t('labview.menu.node')} title={t('labview.addNodesTitle')} disabled={locked} onClick={() => setAddDlg({ pos: dropPos(), at: lastPointer.current })} />
+            <TopBtn icon="nodes" label={t('labview.menu.nodes')} title={t('labview.nodesTable')} onClick={() => setListDlg('nodes')} />
+            <TopBtn icon="links" label={t('labview.links')} title={t('labview.linksTable')} onClick={() => setListDlg('links')} />
+            <TopBtn icon="config" label={t('labview.config')} title={t('labview.startupConfig')} onClick={() => setCfgDlg({})} />
+            <TopBtn icon="capture" label={t('labview.capture')} title={t('labview.capturePacketsWireshark')} badge={caps.some((c) => c.running)} onClick={() => setCapDlg({})} />
           </div>
           <div className="seg">
-            <TopBtn icon="play" label="Avvia tutto" title="Avvia tutti i nodi" cls="go" disabled={!lab.nodes.length || !!busy || readOnly} onClick={() => bulk(allNames, 'start')} />
-            <TopBtn icon="stop" label="Ferma tutto" title="Ferma tutti i nodi" cls="stop" disabled={!running || !!busy || readOnly} onClick={() => bulk(allNames, 'stop')} />
+            <TopBtn icon="play" label={t('labview.startAllShort')} title={t('labview.startAllNodes')} cls="go" disabled={!lab.nodes.length || !!busy || readOnly} onClick={() => bulk(allNames, 'start')} />
+            <TopBtn icon="stop" label={t('labview.stopAllShort')} title={t('labview.stopAllNodes')} cls="stop" disabled={!running || !!busy || readOnly} onClick={() => bulk(allNames, 'stop')} />
           </div>
           <div className="seg">
-            <TopBtn icon="exit" label="Esci" title="Torna al Workspace" onClick={close} />
-            <TopBtn icon="status" label="Stato server" title="Stato del server" onClick={() => setListDlg('status')} />
+            <TopBtn icon="exit" label={t('labview.exit')} title={t('labview.backToWorkspace')} onClick={close} />
+            <TopBtn icon="status" label={t('labview.serverStatusShort')} title={t('nav.serverStatus')} onClick={() => setListDlg('status')} />
           </div>
         </nav>
 
         <div className="ed-right">
           {busy && <span className="busy"><span className="spin" />{busy}</span>}
           {readOnly ? null : running
-            ? <button className="danger" onClick={() => confirm('Fermare tutti i nodi e rimuovere le reti del lab?') && destroy()} disabled={!!busy}><Ui name="power" size={15} /> Destroy</button>
+            ? <button className="danger" onClick={() => confirm(t('labview.confirm.destroy')) && destroy()} disabled={!!busy}><Ui name="power" size={15} /> Destroy</button>
             : <button className="primary" onClick={deploy} disabled={!!busy || lab.nodes.length === 0}><Ui name="deploy" size={15} /> Deploy</button>}
           <ThemeButton />
-          <button className="icon-btn" title="Altre azioni" onClick={openMore}><Ui name="more" /></button>
+          <button className="icon-btn" title={t('labview.moreActions')} onClick={openMore}><Ui name="more" /></button>
         </div>
       </header>
 
@@ -1197,38 +1198,38 @@ function Editor({ name, templates, onError, onBack, onReloadTemplates }) {
           </div>
 
           <footer className="statusbar">
-            <span><b>{lab.nodes.length}</b> nodi</span>
-            <span><b>{lab.links.length}</b> collegamenti</span>
-            <span className={upCount ? 'ok-t' : ''}><b>{upCount}</b> accesi</span>
+            <span><b>{lab.nodes.length}</b> {t('labview.nodesLabel')}</span>
+            <span><b>{lab.links.length}</b> {t('labview.linksLabel')}</span>
+            <span className={upCount ? 'ok-t' : ''}><b>{upCount}</b> {t('labview.upLabel')}</span>
             <div className="spacer" />
             <button className={`sb-btn ${guideDlg ? 'on' : ''}`}
-              title={generated ? 'Mostra/nascondi la guida del lab (obiettivo, passi, soluzione)' : 'Mostra/nascondi le note del lab'}
+              title={generated ? t('labview.toggleGuide') : t('labview.toggleNotes')}
               onClick={() => setGuideDlg((v) => !v)}>
-              <Ui name="info" size={13} /> {generated ? 'Guida' : 'Note'}
+              <Ui name="info" size={13} /> {generated ? t('labview.guide') : t('labview.notes')}
               {(generated ? lab.instructions : lab.notes) ? <span className="sb-dot" /> : null}
             </button>
-            <button className="sb-btn" title={consoleMode === 'window' ? 'Consolle in finestre mobili sul foglio — clicca per metterle in basso' : 'Consolle in basso (dock) — clicca per aprirle in finestre mobili'}
-              onClick={() => setConsoleMode((v) => (v === 'window' ? 'dock' : 'window'))}><Ui name="console" size={13} /> {consoleMode === 'window' ? 'Finestre' : 'In basso'}</button>
-            <button className={`sb-btn ${consoleTarget === 'native' ? 'on' : ''}`} title={consoleTarget === 'browser' ? 'Consolle nel browser — clicca per aprirle nel terminale del PC' : 'Consolle nel terminale del PC — clicca per aprirle nel browser'}
-              onClick={() => setConsoleTarget((v) => (v === 'browser' ? 'native' : 'browser'))}><Ui name="expand" size={13} /> {consoleTarget === 'browser' ? 'Browser' : 'Terminale PC'}</button>
-            <button className="sb-btn" title={panMode ? 'Il trascinamento sposta il foglio — clicca per selezionare i nodi a riquadro' : 'Il trascinamento seleziona i nodi a riquadro — clicca per spostare il foglio'}
-              onClick={() => setPanMode((v) => !v)}><Ui name={panMode ? 'hand' : 'select'} size={13} /> {panMode ? 'Sposta' : 'Seleziona'}</button>
-            <button className={`sb-btn ${ifaceLabels === 'always' ? 'on' : ''}`} title="Mostra sempre i nomi delle interfacce"
-              onClick={() => setIfaceLabels((v) => (v === 'always' ? 'hover' : 'always'))}><Ui name="links" size={13} /> Interfacce</button>
-            <button className={`sb-btn ${showMap ? 'on' : ''}`} title="Minimappa" onClick={() => setShowMap((v) => !v)}><Ui name="fit" size={13} /> Mappa</button>
-            <button className="sb-btn" title="Adatta alla vista" onClick={fit}>{Math.round(zoom * 100)}%</button>
+            <button className="sb-btn" title={consoleMode === 'window' ? t('labview.consoleWindowTitle') : t('labview.consoleDockTitle')}
+              onClick={() => setConsoleMode((v) => (v === 'window' ? 'dock' : 'window'))}><Ui name="console" size={13} /> {consoleMode === 'window' ? t('labview.windows') : t('labview.bottom')}</button>
+            <button className={`sb-btn ${consoleTarget === 'native' ? 'on' : ''}`} title={consoleTarget === 'browser' ? t('labview.consoleBrowserTitle') : t('labview.consoleNativeTitle')}
+              onClick={() => setConsoleTarget((v) => (v === 'browser' ? 'native' : 'browser'))}><Ui name="expand" size={13} /> {consoleTarget === 'browser' ? t('labview.browser') : t('labview.pcTerminal')}</button>
+            <button className="sb-btn" title={panMode ? t('labview.panTitle') : t('labview.selectTitle')}
+              onClick={() => setPanMode((v) => !v)}><Ui name={panMode ? 'hand' : 'select'} size={13} /> {panMode ? t('labview.move') : t('labview.select')}</button>
+            <button className={`sb-btn ${ifaceLabels === 'always' ? 'on' : ''}`} title={t('labview.showIfaceNames')}
+              onClick={() => setIfaceLabels((v) => (v === 'always' ? 'hover' : 'always'))}><Ui name="links" size={13} /> {t('labview.interfaces')}</button>
+            <button className={`sb-btn ${showMap ? 'on' : ''}`} title={t('labview.minimap')} onClick={() => setShowMap((v) => !v)}><Ui name="fit" size={13} /> {t('labview.map')}</button>
+            <button className="sb-btn" title={t('labview.fitView')} onClick={fit}>{Math.round(zoom * 100)}%</button>
           </footer>
         </div>
 
         {showInspector && (
           <aside className="inspector">
-            <button className="icon-btn insp-x" title="Chiudi" onClick={clearSelection}><Ui name="close" size={16} /></button>
+            <button className="icon-btn insp-x" title={t('common.close')} onClick={clearSelection}><Ui name="close" size={16} /></button>
             {selAnn ? (
               <AnnPanel key={selAnn.id} a={{ ...ANN_BASE, ...selAnn }} locked={locked} onChange={(patch) => updateAnn(selAnn.id, patch)}
                 onDelete={() => removeAnns([selAnn.id])} onDuplicate={() => duplicateAnn(selAnn.id)}
                 onImage={() => {
                   const inp = document.createElement('input'); inp.type = 'file'; inp.accept = 'image/*'
-                  inp.onchange = () => { const f = inp.files[0]; if (!f) return; if (f.size > 2_000_000) return onError(new Error('Immagine troppo grande (max 2 MB)'))
+                  inp.onchange = () => { const f = inp.files[0]; if (!f) return; if (f.size > 2_000_000) return onError(new Error(t('labview.err.imageTooBig')))
                     const rd = new FileReader(); rd.onload = () => updateAnn(selAnn.id, { image: rd.result }); rd.readAsDataURL(f) }
                   inp.click()
                 }} />
@@ -1241,7 +1242,7 @@ function Editor({ name, templates, onError, onBack, onReloadTemplates }) {
                 lab={lab} locked={running || locked}
                 onChange={(patch) => mutate((l) => Object.assign(l.nodes.find((n) => n.name === selNode.name), patch))}
                 onRename={(newName) => {
-                  if (!NODE_NAME_RE.test(newName) || lab.nodes.some((n) => n.name === newName)) return onError(new Error('Nome non valido o già usato'))
+                  if (!NODE_NAME_RE.test(newName) || lab.nodes.some((n) => n.name === newName)) return onError(new Error(t('labview.err.nameInvalidOrUsed')))
                   mutate((l) => {
                     l.nodes.find((n) => n.name === selNode.name).name = newName
                     l.links.forEach((x) => { x.endpoints = x.endpoints.map((e) => { const [n, i] = splitEp(e); return n === selNode.name ? `${newName}:${i}` : e }) })
@@ -1264,42 +1265,42 @@ function Editor({ name, templates, onError, onBack, onReloadTemplates }) {
               />
             ) : (
               <div className="panel">
-                <div className="panel-head"><span className="ph-ico"><Ui name="links" size={20} /></span><div><h3>Collegamento</h3><small>{splitEp(selLink.endpoints[0])[0]} ⟷ {splitEp(selLink.endpoints[1])[0]}</small></div></div>
-                <Section title="Interfacce">
+                <div className="panel-head"><span className="ph-ico"><Ui name="links" size={20} /></span><div><h3>{t('labview.link')}</h3><small>{splitEp(selLink.endpoints[0])[0]} ⟷ {splitEp(selLink.endpoints[1])[0]}</small></div></div>
+                <Section title={t('labview.interfaces')}>
                   <LinkEnd lab={lab} tplByName={tplByName} ep={selLink.endpoints[0]} other={selLink.endpoints[1]} locked={running || locked}
                     onChange={(v) => mutate((l) => { l.links[Number(selected.id.slice(1))].endpoints[0] = v })} />
                   <LinkEnd lab={lab} tplByName={tplByName} ep={selLink.endpoints[1]} other={selLink.endpoints[0]} locked={running || locked}
                     onChange={(v) => mutate((l) => { l.links[Number(selected.id.slice(1))].endpoints[1] = v })} />
-                  {running && <p className="hint">Le interfacce cambiano al prossimo deploy.</p>}
+                  {running && <p className="hint">{t('labview.hint.ifacesNextDeploy')}</p>}
                 </Section>
-                <Section title="Aspetto">
+                <Section title={t('labview.appearance')}>
                   <LinkLook link={selLink} locked={locked}
                     onChange={(patch) => mutate((l) => {
                       const ln = l.links[Number(selected.id.slice(1))]
                       for (const [k, v] of Object.entries(patch)) { if (v == null || v === '') delete ln[k]; else ln[k] = v }
                     })} />
                 </Section>
-                <Section title="Condizionamento" defaultOpen={false}>
+                <Section title={t('labview.conditioning')} defaultOpen={false}>
                   <LinkImpairments link={selLink}
                     onChange={(patch) => mutate((l) => Object.assign(l.links[Number(selected.id.slice(1))], patch))}
                     running={running} onApply={applyConditioning} />
                 </Section>
-                <Section title="Cattura pacchetti" defaultOpen={false}>
+                <Section title={t('labview.capturePackets')} defaultOpen={false}>
                   <div className="cap-btns">
                     {selLink.endpoints.filter((e) => isVm(tplOf(splitEp(e)[0]))).map((e) => {
                       const [n, i] = splitEp(e), on = caps.some((c) => c.running && c.node === n && c.iface === i)
                       return (
-                        <button key={e} className={on ? 'on' : ''} disabled={state?.nodes?.[n]?.status !== 'running'} onClick={() => openWireshark(n, i)} title="Apri Wireshark su questa interfaccia">
-                          <span className={`rec ${on ? 'on' : ''}`} /> <Ui name="capture" size={15} /> Wireshark su {n} <code>{i}</code>
+                        <button key={e} className={on ? 'on' : ''} disabled={state?.nodes?.[n]?.status !== 'running'} onClick={() => openWireshark(n, i)} title={t('labview.openWiresharkOnIface')}>
+                          <span className={`rec ${on ? 'on' : ''}`} /> <Ui name="capture" size={15} /> {t('labview.wiresharkNode', { n })} <code>{i}</code>
                         </button>
                       )
                     })}
                     <button className="ghost" onClick={() => { const e = selLink.endpoints.find((x) => isVm(tplOf(splitEp(x)[0]))); setCapDlg(e ? { node: splitEp(e)[0], iface: splitEp(e)[1] } : {}) }}>
-                      <Ui name="nodes" size={15} /> Tabella pacchetti nel browser…
+                      <Ui name="nodes" size={15} /> {t('labview.packetTableBrowser')}
                     </button>
                   </div>
                 </Section>
-                <button className="danger wide" onClick={deleteSelected} disabled={running || locked}><Ui name="trash" size={15} /> Elimina</button>
+                <button className="danger wide" onClick={deleteSelected} disabled={running || locked}><Ui name="trash" size={15} /> {t('common.delete')}</button>
               </div>
             )}
           </aside>
@@ -1310,7 +1311,7 @@ function Editor({ name, templates, onError, onBack, onReloadTemplates }) {
 
       {consoles.length > 0 && consoleMode === 'dock' && (
         <section className="dock" style={{ height: dockH }}>
-          <div className="dock-grip" title="Trascina per ridimensionare la consolle" onPointerDown={startDockResize} />
+          <div className="dock-grip" title={t('labview.dragResizeConsole')} onPointerDown={startDockResize} />
           <div className="tabs">
             {consoles.map((c) => (
               <div key={c.id} className={`tab ${c.id === activeConsole ? 'on' : ''}`} onClick={() => setActiveConsole(c.id)}>
@@ -1343,7 +1344,7 @@ function Editor({ name, templates, onError, onBack, onReloadTemplates }) {
           lab={lab} locked={locked} running={state?.nodes?.[editNode]?.status === 'running'} configSet={lab.config_set || 'default'}
           onClose={() => setEditNode(null)} onError={onError} onReloadTemplates={onReloadTemplates}
           onSave={(patch, newName) => {
-            if (newName !== editNode && (!NODE_NAME_RE.test(newName) || lab.nodes.some((n) => n.name === newName))) return onError(new Error('Nome non valido o già usato'))
+            if (newName !== editNode && (!NODE_NAME_RE.test(newName) || lab.nodes.some((n) => n.name === newName))) return onError(new Error(t('labview.err.nameInvalidOrUsed')))
             mutate((l) => {
               const x = l.nodes.find((y) => y.name === editNode)
               for (const [k, v] of Object.entries(patch)) { if (v == null || v === '' || (Array.isArray(v) && !v.length)) delete x[k]; else x[k] = v }
@@ -1375,15 +1376,15 @@ function Editor({ name, templates, onError, onBack, onReloadTemplates }) {
       {showExtHelp && (
         <div className="modal-bg" onClick={() => setShowExtHelp(false)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <ModalHead icon="expand" title="Consolle nel terminale del PC" onClose={() => setShowExtHelp(false)} />
-            <p className="hint">NetSO ha scaricato un file che apre la consolle nel terminale del tuo computer. Aprilo così:</p>
+            <ModalHead icon="expand" title={t('labview.consoleInPcTerminal')} onClose={() => setShowExtHelp(false)} />
+            <p className="hint">{t('labview.extHelp.intro')}</p>
             <ul className="ext-help">
-              <li className={osKind() === 'mac' ? 'on' : ''}><b>macOS</b> — file <code>.command</code>: al primo uso tasto destro → <b>Apri</b> (per superare Gatekeeper). Serve <code>telnet</code> (<code>brew install telnet</code>).</li>
-              <li className={osKind() === 'win' ? 'on' : ''}><b>Windows</b> — file <code>.bat</code>: doppio click. Serve <b>PuTTY</b> (consigliato) o il «Client Telnet» di Windows abilitato.</li>
-              <li className={osKind() === 'linux' ? 'on' : ''}><b>Linux</b> — file <code>.sh</code>: <code>chmod +x</code> e doppio click, oppure eseguilo dal terminale.</li>
+              <li className={osKind() === 'mac' ? 'on' : ''}><b>macOS</b> — {t('labview.extHelp.file')} <code>.command</code>: {t('labview.extHelp.macA')} <b>{t('labview.extHelp.macOpen')}</b> {t('labview.extHelp.macB')} <code>telnet</code> (<code>brew install telnet</code>).</li>
+              <li className={osKind() === 'win' ? 'on' : ''}><b>Windows</b> — {t('labview.extHelp.file')} <code>.bat</code>: {t('labview.extHelp.winA')} <b>PuTTY</b> {t('labview.extHelp.winB')}</li>
+              <li className={osKind() === 'linux' ? 'on' : ''}><b>Linux</b> — {t('labview.extHelp.file')} <code>.sh</code>: <code>chmod +x</code> {t('labview.extHelp.linux')}</li>
             </ul>
-            <label className="ext-help-ck"><input type="checkbox" onChange={(e) => setExtHelpSeen(e.target.checked)} /> Non mostrare più</label>
-            <div className="row-end"><button className="primary" onClick={() => setShowExtHelp(false)}>Ho capito</button></div>
+            <label className="ext-help-ck"><input type="checkbox" onChange={(e) => setExtHelpSeen(e.target.checked)} /> {t('labview.dontShowAgain')}</label>
+            <div className="row-end"><button className="primary" onClick={() => setShowExtHelp(false)}>{t('labview.gotIt')}</button></div>
           </div>
         </div>
       )}
@@ -1394,7 +1395,7 @@ function Editor({ name, templates, onError, onBack, onReloadTemplates }) {
         onCreate={(a, b) => {
           setLinkDlg(null)
           // hot-plug: on a running lab the server wires the new cable live
-          if (running) return run('Collego il cavo…', () => api(`/labs/${name}/links/connect`, { method: 'POST', body: { endpoints: [a, b] } }))
+          if (running) return run(t('labview.busy.connecting'), () => api(`/labs/${name}/links/connect`, { method: 'POST', body: { endpoints: [a, b] } }))
           mutate((l) => l.links.push({ endpoints: [a, b] }))
         }} />}
 
@@ -1437,11 +1438,11 @@ function Editor({ name, templates, onError, onBack, onReloadTemplates }) {
       {yaml !== null && (
         <div className="modal-bg" onClick={() => setYaml(null)}>
           <div className="modal wide" onClick={(e) => e.stopPropagation()}>
-            <ModalHead icon="code" title="Definizione YAML" onClose={() => setYaml(null)} />
+            <ModalHead icon="code" title={t('labview.yamlTitle')} onClose={() => setYaml(null)} />
             <textarea className="code" value={yaml} onChange={(e) => setYaml(e.target.value)} spellCheck={false} />
             <div className="row-end">
-              <button className="ghost" onClick={() => setYaml(null)}>Annulla</button>
-              <button className="primary" onClick={saveYaml}>Applica</button>
+              <button className="ghost" onClick={() => setYaml(null)}>{t('common.cancel')}</button>
+              <button className="primary" onClick={saveYaml}>{t('labview.apply')}</button>
             </div>
           </div>
         </div>
@@ -1586,11 +1587,12 @@ export function ContextMenu({ x, y, title, icon, dev, sub, items, onClose }) {
 }
 
 export function ModalHead({ icon, title, sub, onClose }) {
+  useLang()
   return (
     <div className="modal-head">
       <span className="mh-ico"><Ui name={icon} size={18} /></span>
       <div className="grow"><h3>{title}</h3>{sub && <small className="muted">{sub}</small>}</div>
-      <button className="icon-btn" onClick={onClose} title="Chiudi"><Ui name="close" size={16} /></button>
+      <button className="icon-btn" onClick={onClose} title={t('common.close')}><Ui name="close" size={16} /></button>
     </div>
   )
 }
@@ -1598,29 +1600,30 @@ export function ModalHead({ icon, title, sub, onClose }) {
 // ------------------------------------------------------------- dialogs
 // searchable device picker (PNETLab "Template" box)
 function TplSelect({ list, value, onChange }) {
+  useLang()
   const [open, setOpen] = useState(!value)
   const [q, setQ] = useState('')
-  const cur = list.find((t) => t.name === value)
+  const cur = list.find((tpl) => tpl.name === value)
   const ql = q.trim().toLowerCase()
-  const shown = list.filter((t) => !ql || `${tplTitle(t)} ${t.name}`.toLowerCase().includes(ql))
+  const shown = list.filter((tpl) => !ql || `${tplTitle(tpl)} ${tpl.name}`.toLowerCase().includes(ql))
   return (
     <div className="tsel">
       <button type="button" className="tsel-btn" onClick={() => setOpen((v) => !v)}>
-        {cur ? <><Icon name={cur.icon} size={20} /><span className="grow">{tplTitle(cur)}</span></> : <span className="grow muted">Scegli…</span>}
+        {cur ? <><Icon name={cur.icon} size={20} /><span className="grow">{tplTitle(cur)}</span></> : <span className="grow muted">{t('labview.choose')}</span>}
         <Ui name="chev" size={12} />
       </button>
       {open && (
         <div className="tsel-pop">
-          <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cerca"
+          <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('labview.search')}
             onKeyDown={(e) => { if (e.key === 'Enter' && shown[0]) { e.preventDefault(); onChange(shown[0]); setOpen(false) } }} />
           <div className="tsel-list">
-            {shown.map((t) => (
-              <div key={t.name} className={`tsel-row ${t.name === value ? 'on' : ''} ${t.ready === false ? 'unsup' : ''}`}
-                onClick={() => { onChange(t); setOpen(false); setQ('') }}>
-                <Icon name={t.icon} size={18} />{tplTitle(t)}
+            {shown.map((tpl) => (
+              <div key={tpl.name} className={`tsel-row ${tpl.name === value ? 'on' : ''} ${tpl.ready === false ? 'unsup' : ''}`}
+                onClick={() => { onChange(tpl); setOpen(false); setQ('') }}>
+                <Icon name={tpl.icon} size={18} />{tplTitle(tpl)}
               </div>
             ))}
-            {!shown.length && <div className="tsel-row muted">Nessuno</div>}
+            {!shown.length && <div className="tsel-row muted">{t('labview.none')}</div>}
           </div>
         </div>
       )}
@@ -1638,16 +1641,17 @@ function AddNodeDialog({ templates, lab, at, onClose, onAdd }) {
       left: Math.max(8, Math.min(at.x, innerWidth - w - 8)),
       top: Math.max(8, Math.min(at.y, innerHeight - h - 8)) })
   }, [at])
+  useLang()
   const [all, setAll] = useState(false)
-  const list = templates.filter((t) => all || t.ready !== false).sort(byTitle)
+  const list = templates.filter((tp) => all || tp.ready !== false).sort(byTitle)
   const [tplName, setTplName] = useState(null)
   const empty = { count: 1, name: '', image: '', cpus: '', ram: '', nics: '', console: '' }
   const [f, setF] = useState(empty)
-  const tpl = templates.find((t) => t.name === tplName)
+  const tpl = templates.find((tp) => tp.name === tplName)
   const set = (k) => (e) => setF((o) => ({ ...o, [k]: e.target.value }))
   const choices = tpl?.choices || []
   const defImage = !tpl ? '' : choices.includes(tpl.image) || !choices.length ? tpl.image : choices[choices.length - 1]
-  const pick = (t) => { setTplName(t.name); setF(empty) }
+  const pick = (tp) => { setTplName(tp.name); setF(empty) }
   const prefix = PREFIX[tpl?.icon] || 'n'
   const nameOk = !f.name || NODE_NAME_RE.test(f.name)
   const vm = isVm(tpl)
@@ -1666,35 +1670,35 @@ function AddNodeDialog({ templates, lab, at, onClose, onAdd }) {
   return (
     <div className="modal-bg" onClick={onClose}>
       <form className="modal add-node" ref={boxRef} style={pos || undefined} onClick={(e) => e.stopPropagation()} onSubmit={submit}>
-        <ModalHead icon="plus" title="Aggiungi nodo" onClose={onClose} />
+        <ModalHead icon="plus" title={t('labview.addNode')} onClose={onClose} />
         <div className="field"><span className="row-between">Template
-          <label className="check small"><input type="checkbox" checked={all} onChange={(e) => setAll(e.target.checked)} /> Mostra anche senza immagine</label></span>
+          <label className="check small"><input type="checkbox" checked={all} onChange={(e) => setAll(e.target.checked)} /> {t('labview.showWithoutImage')}</label></span>
           <TplSelect list={list} value={tplName} onChange={pick} />
         </div>
         {tpl && <>
           {tpl.ready === false && <p className="hint warn">{tpl.kind === 'iol'
             ? (tpl.problems?.length ? tpl.problems.join(' · ')
-              : 'Nessun file IOL (.bin) sul server NetSO: importali da Dispositivi → Immagini → PNETLab (sorgente root@IP-PNETLAB:/opt/unetlab/addons).')
-            : 'Immagine non presente sul server NetSO: caricala o importala da Dispositivi → Immagini.'}</p>}
+              : t('labview.iolNoBin'))
+            : t('labview.imageMissingUpload')}</p>}
           <div className="grid2">
-            <label className="field"><span>Numero di nodi</span><input type="number" min="1" max="50" value={f.count} onChange={set('count')} /></label>
+            <label className="field"><span>{t('labview.numNodes')}</span><input type="number" min="1" max="50" value={f.count} onChange={set('count')} /></label>
             {vm ? (
-              <label className="field"><span>Immagine</span>
+              <label className="field"><span>{t('labview.image')}</span>
                 {choices.length ? (
                   <select value={f.image || defImage} onChange={set('image')}>
                     {choices.map((c) => <option key={c} value={c}>{c}</option>)}
                   </select>
                 ) : <input placeholder={tpl.image} value={f.image} onChange={set('image')} />}
               </label>
-            ) : <label className="field"><span>Porte</span><input type="number" min="1" max="64" placeholder={tpl.nics} value={f.nics} onChange={set('nics')} /></label>}
+            ) : <label className="field"><span>{t('labview.ports')}</span><input type="number" min="1" max="64" placeholder={tpl.nics} value={f.nics} onChange={set('nics')} /></label>}
           </div>
-          <label className="field"><span>{Number(f.count) > 1 ? 'Prefisso nome' : 'Nome'}</span>
+          <label className="field"><span>{Number(f.count) > 1 ? t('labview.namePrefix') : t('labview.name')}</span>
             <input className={nameOk ? '' : 'bad'} placeholder={Number(f.count) > 1 ? prefix : freeName(lab, prefix)} value={f.name} onChange={set('name')} /></label>
           {vm && <div className={tpl.kind === 'qemu' ? 'grid4' : 'grid3'}>
             <label className="field"><span>CPU</span><input type="number" min="1" placeholder={tpl.cpus} value={f.cpus} onChange={set('cpus')} /></label>
             <label className="field"><span>RAM (MB)</span><input type="number" min="64" step="64" placeholder={tpl.ram} value={f.ram} onChange={set('ram')} /></label>
             <label className="field"><span>Ethernet</span><input type="number" min="1" max="32" placeholder={tpl.nics} value={f.nics} onChange={set('nics')} /></label>
-            {tpl.kind === 'qemu' && <label className="field"><span>Consolle</span>
+            {tpl.kind === 'qemu' && <label className="field"><span>{t('labview.console')}</span>
               <select value={f.console} onChange={set('console')}>
                 <option value="">{consoleLabel(tpl.console)}</option>
                 {CONSOLES.filter(([c]) => c !== tpl.console).map(([c, l]) => <option key={c} value={c}>{l}</option>)}
@@ -1702,8 +1706,8 @@ function AddNodeDialog({ templates, lab, at, onClose, onAdd }) {
           </div>}
         </>}
         <div className="row-end">
-          <button type="button" className="ghost" onClick={onClose}>Annulla</button>
-          <button className="primary" type="submit" disabled={!tpl || !nameOk}><Ui name="plus" size={15} /> Aggiungi</button>
+          <button type="button" className="ghost" onClick={onClose}>{t('common.cancel')}</button>
+          <button className="primary" type="submit" disabled={!tpl || !nameOk}><Ui name="plus" size={15} /> {t('labview.add')}</button>
         </div>
       </form>
     </div>
@@ -1711,6 +1715,7 @@ function AddNodeDialog({ templates, lab, at, onClose, onAdd }) {
 }
 
 function LinkDialog({ lab, tplByName, source, target, onClose, onCreate }) {
+  useLang()
   const free = (node) => {
     const n = lab.nodes.find((x) => x.name === node)
     const used = usedIfaces(lab, node)
@@ -1733,15 +1738,15 @@ function LinkDialog({ lab, tplByName, source, target, onClose, onCreate }) {
   return (
     <div className="modal-bg" onClick={onClose}>
       <form className="modal" onClick={(e) => e.stopPropagation()} onSubmit={(e) => { e.preventDefault(); onCreate(`${source}:${ia}`, `${target}:${ib}`) }}>
-        <ModalHead icon="links" title="Nuovo collegamento" sub="Scegli le interfacce da collegare" onClose={onClose} />
+        <ModalHead icon="links" title={t('labview.newLink')} sub={t('labview.pickIfaces')} onClose={onClose} />
         <div className="link-pick">
           {side(source, fa, ia, setIa)}
           <div className="link-wire" />
           {side(target, fb, ib, setIb)}
         </div>
         <div className="row-end">
-          <button type="button" className="ghost" onClick={onClose}>Annulla</button>
-          <button className="primary" type="submit" autoFocus>Collega</button>
+          <button type="button" className="ghost" onClick={onClose}>{t('common.cancel')}</button>
+          <button className="primary" type="submit" autoFocus>{t('labview.connect')}</button>
         </div>
       </form>
     </div>
@@ -1749,14 +1754,15 @@ function LinkDialog({ lab, tplByName, source, target, onClose, onCreate }) {
 }
 
 function NodesDialog({ lab, state, tplByName, locked, onClose, onChange, onAction, onConsole, onDelete, onLocate }) {
+  useLang()
   const num = (n, k) => (e) => onChange(n, { [k]: e.target.value === '' ? undefined : Number(e.target.value) })
   return (
     <div className="modal-bg" onClick={onClose}>
       <div className="modal xl" onClick={(e) => e.stopPropagation()}>
-        <ModalHead icon="nodes" title="Nodi configurati" sub={`${lab.nodes.length} nodi nel lab`} onClose={onClose} />
+        <ModalHead icon="nodes" title={t('labview.configuredNodes')} sub={t('labview.nNodesInLab', { n: lab.nodes.length })} onClose={onClose} />
         <div className="tbl-wrap">
           <table className="tbl">
-            <thead><tr><th /><th>Nome</th><th>Template</th><th>Immagine</th><th>CPU</th><th>RAM</th><th>NIC</th><th>Accesso</th><th /></tr></thead>
+            <thead><tr><th /><th>{t('labview.th.name')}</th><th>Template</th><th>{t('labview.image')}</th><th>CPU</th><th>RAM</th><th>NIC</th><th>{t('labview.th.access')}</th><th /></tr></thead>
             <tbody>
               {lab.nodes.map((n) => {
                 const tpl = tplByName[n.template], ns = state?.nodes?.[n.name], st = ns?.status || 'stopped'
@@ -1773,33 +1779,34 @@ function NodesDialog({ lab, state, tplByName, locked, onClose, onChange, onActio
                     <td className="mono small">{live && ns.console_port ? `telnet :${ns.console_port}` : live && ns.container ? 'docker' : '—'}</td>
                     <td className="row-acts">
                       {vm && (live
-                        ? <TbBtn title="Ferma" icon="stop" onClick={() => onAction(n.name, 'stop')} />
-                        : <TbBtn title="Avvia" icon="play" cls="go" onClick={() => onAction(n.name, 'start')} />)}
-                      {vm && <TbBtn title="Consolle" icon="console" disabled={!canDo(tpl, ns, 'console')} onClick={() => { onClose(); onConsole(n.name) }} />}
-                      {hasDisks(tpl) && <TbBtn title="Azzera dischi" icon="wipe" disabled={live} onClick={() => onAction(n.name, 'wipe')} />}
-                      <TbBtn title="Elimina" icon="trash" cls="danger" disabled={live || locked} onClick={() => onDelete(n.name)} />
+                        ? <TbBtn title={t('labview.stop')} icon="stop" onClick={() => onAction(n.name, 'stop')} />
+                        : <TbBtn title={t('labview.start')} icon="play" cls="go" onClick={() => onAction(n.name, 'start')} />)}
+                      {vm && <TbBtn title={t('labview.console')} icon="console" disabled={!canDo(tpl, ns, 'console')} onClick={() => { onClose(); onConsole(n.name) }} />}
+                      {hasDisks(tpl) && <TbBtn title={t('labview.wipeDisksShort')} icon="wipe" disabled={live} onClick={() => onAction(n.name, 'wipe')} />}
+                      <TbBtn title={t('common.delete')} icon="trash" cls="danger" disabled={live || locked} onClick={() => onDelete(n.name)} />
                     </td>
                   </tr>
                 )
               })}
             </tbody>
           </table>
-          {!lab.nodes.length && <p className="hint">Nessun nodo.</p>}
+          {!lab.nodes.length && <p className="hint">{t('labview.noNodes')}</p>}
         </div>
-        <p className="hint">Le modifiche a CPU/RAM/immagine valgono al prossimo avvio del nodo. Ricorda di salvare.</p>
+        <p className="hint">{t('labview.hint.cpuRamNextStart')}</p>
       </div>
     </div>
   )
 }
 
 function LinksDialog({ lab, state, locked, onClose, onSelect, onDelete, canCapture, onCapture }) {
+  useLang()
   return (
     <div className="modal-bg" onClick={onClose}>
       <div className="modal wide" onClick={(e) => e.stopPropagation()}>
-        <ModalHead icon="links" title="Collegamenti" sub={`${lab.links.length} collegamenti nel lab`} onClose={onClose} />
+        <ModalHead icon="links" title={t('labview.links')} sub={t('labview.nLinksInLab', { n: lab.links.length })} onClose={onClose} />
         <div className="tbl-wrap">
           <table className="tbl">
-            <thead><tr><th /><th>Estremo A</th><th /><th>Estremo B</th><th>Condizionamento</th><th /></tr></thead>
+            <thead><tr><th /><th>{t('labview.th.endpointA')}</th><th /><th>{t('labview.th.endpointB')}</th><th>{t('labview.conditioning')}</th><th /></tr></thead>
             <tbody>
               {lab.links.map((l, i) => {
                 const [a, ai] = splitEp(l.endpoints[0]), [b, bi] = splitEp(l.endpoints[1])
@@ -1810,18 +1817,18 @@ function LinksDialog({ lab, state, locked, onClose, onSelect, onDelete, canCaptu
                     <td><b>{a}</b> <code>{ai}</code></td>
                     <td className="muted">⟷</td>
                     <td><b>{b}</b> <code>{bi}</code></td>
-                    <td className="mono small">{condSummary(l) || <span className="muted">ideale</span>}</td>
+                    <td className="mono small">{condSummary(l) || <span className="muted">{t('labview.ideal')}</span>}</td>
                     <td className="row-acts">
-                      <TbBtn title="Cattura pacchetti" icon="capture" disabled={!l.endpoints.some(canCapture)} onClick={() => onCapture(l.endpoints.find(canCapture))} />
-                      <TbBtn title="Modifica" icon="edit" onClick={() => onSelect(i)} />
-                      <TbBtn title="Elimina" icon="trash" cls="danger" disabled={locked} onClick={() => onDelete(i)} />
+                      <TbBtn title={t('labview.capturePackets')} icon="capture" disabled={!l.endpoints.some(canCapture)} onClick={() => onCapture(l.endpoints.find(canCapture))} />
+                      <TbBtn title={t('labview.edit')} icon="edit" onClick={() => onSelect(i)} />
+                      <TbBtn title={t('common.delete')} icon="trash" cls="danger" disabled={locked} onClick={() => onDelete(i)} />
                     </td>
                   </tr>
                 )
               })}
             </tbody>
           </table>
-          {!lab.links.length && <p className="hint">Nessun collegamento. Collega due nodi trascinando dal pallino che appare sopra il nodo.</p>}
+          {!lab.links.length && <p className="hint">{t('labview.noLinks')}</p>}
         </div>
       </div>
     </div>
@@ -1829,25 +1836,26 @@ function LinksDialog({ lab, state, locked, onClose, onSelect, onDelete, canCaptu
 }
 
 function DetailsDialog({ lab, state, tplByName, warnings, onClose, onDescription }) {
+  useLang()
   const live = lab.nodes.filter((n) => state?.nodes?.[n.name]?.status === 'running')
   const res = (list, k) => list.reduce((s, n) => s + (n[k] ?? tplByName[n.template]?.[k] ?? 0), 0)
   const vms = lab.nodes.filter((n) => isVm(tplByName[n.template]))
   return (
     <div className="modal-bg" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <ModalHead icon="info" title={lab.name} sub="Dettagli del lab" onClose={onClose} />
-        <label className="field"><span>Descrizione</span>
+        <ModalHead icon="info" title={lab.name} sub={t('labview.labDetails')} onClose={onClose} />
+        <label className="field"><span>{t('labview.description')}</span>
           <textarea rows={3} value={lab.description || ''} onChange={(e) => onDescription(e.target.value)} /></label>
         <div className="stat-grid">
-          <div><b>{lab.nodes.length}</b><span>nodi</span></div>
-          <div><b>{live.length}</b><span>attivi</span></div>
-          <div><b>{lab.links.length}</b><span>collegamenti</span></div>
-          <div><b>{res(vms, 'cpus')}</b><span>vCPU totali</span></div>
-          <div><b>{(res(vms, 'ram') / 1024).toFixed(1)}</b><span>GB RAM totali</span></div>
-          <div><b>{(res(live.filter((n) => isVm(tplByName[n.template])), 'ram') / 1024).toFixed(1)}</b><span>GB RAM in uso</span></div>
+          <div><b>{lab.nodes.length}</b><span>{t('labview.nodesLabel')}</span></div>
+          <div><b>{live.length}</b><span>{t('labview.active')}</span></div>
+          <div><b>{lab.links.length}</b><span>{t('labview.linksLabel')}</span></div>
+          <div><b>{res(vms, 'cpus')}</b><span>{t('labview.totalVcpu')}</span></div>
+          <div><b>{(res(vms, 'ram') / 1024).toFixed(1)}</b><span>{t('labview.totalRamGb')}</span></div>
+          <div><b>{(res(live.filter((n) => isVm(tplByName[n.template])), 'ram') / 1024).toFixed(1)}</b><span>{t('labview.usedRamGb')}</span></div>
         </div>
         {warnings.length > 0 && <div className="warning small">⚠ {warnings.join(' · ')}</div>}
-        <p className="hint">Doppio clic su un nodo avviato apre la consolle. Canc elimina la selezione, ⌘S salva, ⌘A seleziona tutto, Esc deseleziona.</p>
+        <p className="hint">{t('labview.hint.shortcuts')}</p>
       </div>
     </div>
   )
@@ -1857,10 +1865,10 @@ function DetailsDialog({ lab, state, tplByName, warnings, onClose, onDescription
 const supportsConfig = (tpl) => !!tpl && !!tpl.config_file && tpl.config_method && tpl.config_method !== 'none'
 
 function configHint(tpl) {
-  if (!supportsConfig(tpl)) return 'Questo template non ha un metodo per ricevere la startup-config.'
-  if (tpl.config_method === 'disk') return `Disco FAT con ${tpl.config_file}: il nodo la legge al boot se la NVRAM è vuota (nodo nuovo o dopo «Azzera»).`
-  if (tpl.config_method === 'iso') return `CD-ROM con ${tpl.config_file}: letta al primo boot (nodo nuovo o dopo «Azzera»).`
-  return `Copiata in ${tpl.config_file} prima di avviare il container (a ogni avvio).`
+  if (!supportsConfig(tpl)) return t('labview.cfgHint.none')
+  if (tpl.config_method === 'disk') return t('labview.cfgHint.disk', { file: tpl.config_file })
+  if (tpl.config_method === 'iso') return t('labview.cfgHint.iso', { file: tpl.config_file })
+  return t('labview.cfgHint.container', { file: tpl.config_file })
 }
 
 function Toggle({ on, onChange, disabled, title }) {
@@ -1873,6 +1881,7 @@ function Toggle({ on, onChange, disabled, title }) {
 }
 
 function StartupConfigDialog({ name, lab, tplByName, initialNode, onClose, onError, onEnable, onActive }) {
+  useLang()
   const nodes = lab.nodes.filter((n) => isVm(tplByName[n.template]))
   const [data, setData] = useState(null) // {active, sets: {set: {node: text}}}
   const [cur, setCur] = useState(lab.config_set || 'default')
@@ -1911,13 +1920,13 @@ function StartupConfigDialog({ name, lab, tplByName, initialNode, onClose, onErr
   const submitAsk = (e) => {
     e.preventDefault()
     const v = ask.value.trim()
-    if (!NAME_RE.test(v)) return onError(new Error('Nome non valido: lettere, numeri, - e _ (inizia con una lettera)'))
+    if (!NAME_RE.test(v)) return onError(new Error(t('labview.err.nameRule')))
     if (ask.mode === 'add') call('', { method: 'POST', body: { name: v, copy_from: cur } }, () => setCur(v))
     else call(`/${cur}/rename`, { method: 'POST', body: { new: v } }, () => { if (data.active === cur) onActive(v); setCur(v) })
     setAsk(null)
   }
   const remove = () => {
-    if (!confirm(`Eliminare il config set «${cur}» con tutte le sue configurazioni?`)) return
+    if (!confirm(t('labview.confirm.deleteSet', { set: cur }))) return
     call(`/${cur}`, { method: 'DELETE' }, () => { if (data.active === cur) onActive('default'); setCur('default') })
   }
   const activate = () => call(`/${cur}/activate`, { method: 'POST' }, () => onActive(cur))
@@ -1946,30 +1955,30 @@ function StartupConfigDialog({ name, lab, tplByName, initialNode, onClose, onErr
   return (
     <div className="modal-bg" onClick={() => go(onClose)}>
       <div className="modal xl cfg" onClick={(e) => e.stopPropagation()}>
-        <ModalHead icon="config" title="Startup config" sub="Configurazioni con cui i nodi si avviano, raggruppate in set" onClose={() => go(onClose)} />
+        <ModalHead icon="config" title={t('labview.startupConfig')} sub={t('labview.startupConfigSub')} onClose={() => go(onClose)} />
         <div className="cfg-bar">
-          <span className="muted small">Config da modificare</span>
+          <span className="muted small">{t('labview.configToEdit')}</span>
           <select value={cur} onChange={(e) => { const v = e.target.value; go(() => setCur(v)) }}>
             {sets.map((s) => <option key={s} value={s}>{data?.active === s ? `✓ ${s}` : s}</option>)}
           </select>
           {data && (data.active === cur
-            ? <span className="pill running">attivo</span>
-            : <button className="ghost" onClick={activate}><Ui name="bolt" size={15} /> Imposta come attivo</button>)}
+            ? <span className="pill running">{t('labview.activePill')}</span>
+            : <button className="ghost" onClick={activate}><Ui name="bolt" size={15} /> {t('labview.setActive')}</button>)}
           <div className="spacer" />
           {ask ? (
             <form className="cfg-ask" onSubmit={submitAsk}>
-              <input autoFocus value={ask.value} placeholder={ask.mode === 'add' ? 'nome nuovo set' : 'nuovo nome'}
+              <input autoFocus value={ask.value} placeholder={ask.mode === 'add' ? t('labview.newSetName') : t('labview.newName')}
                 onChange={(e) => setAsk({ ...ask, value: e.target.value })} />
-              <button className="primary" type="submit">{ask.mode === 'add' ? 'Crea' : 'Rinomina'}</button>
-              <button type="button" className="ghost" onClick={() => setAsk(null)}>Annulla</button>
+              <button className="primary" type="submit">{ask.mode === 'add' ? t('labview.create') : t('common.rename')}</button>
+              <button type="button" className="ghost" onClick={() => setAsk(null)}>{t('common.cancel')}</button>
             </form>
           ) : (
             <div className="cfg-acts">
-              <button className="ghost" onClick={() => go(() => setAsk({ mode: 'add', value: '' }))} title={`Nuovo set, copia di «${cur}»`}><Ui name="plus" size={15} /> Aggiungi</button>
-              <button className="ghost" disabled={cur === 'default'} onClick={() => setAsk({ mode: 'rename', value: cur })}><Ui name="edit" size={15} /> Rinomina</button>
-              <button className="ghost" disabled={cur === 'default'} onClick={remove}><Ui name="trash" size={15} /> Elimina</button>
-              <button className="ghost" onClick={() => fileRef.current.click()}><Ui name="deploy" size={15} /> Importa</button>
-              <button className="ghost" onClick={() => go(exportSet)}><Ui name="download" size={15} /> Esporta</button>
+              <button className="ghost" onClick={() => go(() => setAsk({ mode: 'add', value: '' }))} title={t('labview.newSetCopy', { set: cur })}><Ui name="plus" size={15} /> {t('labview.add')}</button>
+              <button className="ghost" disabled={cur === 'default'} onClick={() => setAsk({ mode: 'rename', value: cur })}><Ui name="edit" size={15} /> {t('common.rename')}</button>
+              <button className="ghost" disabled={cur === 'default'} onClick={remove}><Ui name="trash" size={15} /> {t('common.delete')}</button>
+              <button className="ghost" onClick={() => fileRef.current.click()}><Ui name="deploy" size={15} /> {t('labview.import')}</button>
+              <button className="ghost" onClick={() => go(exportSet)}><Ui name="download" size={15} /> {t('labview.export')}</button>
               <input ref={fileRef} type="file" accept=".yml,.yaml" hidden onChange={importSet} />
             </div>
           )}
@@ -1978,7 +1987,7 @@ function StartupConfigDialog({ name, lab, tplByName, initialNode, onClose, onErr
         <div className="cfg-body">
           <div className="cfg-nodes">
             <div className="cfg-row all">
-              <span className="grow">Cambia tutti</span>
+              <span className="grow">{t('labview.changeAll')}</span>
               <Toggle on={allOn} disabled={!supported.length}
                 onChange={(on) => onEnable(Object.fromEntries(supported.map((n) => [n.name, on])))} />
             </div>
@@ -1988,28 +1997,28 @@ function StartupConfigDialog({ name, lab, tplByName, initialNode, onClose, onErr
               return (
                 <div key={n.name} className={`cfg-row ${sel === n.name ? 'on' : ''}`} onClick={() => go(() => setSel(n.name))}>
                   <Icon name={tpl?.icon} size={18} />
-                  <span className="grow">{n.name}{has && <span className="has-cfg" title="Ha una configurazione in questo set" />}</span>
-                  <Toggle on={!!n.startup_config} disabled={!ok} title={ok ? '' : 'Non supportata da questo template'}
+                  <span className="grow">{n.name}{has && <span className="has-cfg" title={t('labview.hasConfigInSet')} />}</span>
+                  <Toggle on={!!n.startup_config} disabled={!ok} title={ok ? '' : t('labview.notSupportedByTemplate')}
                     onChange={(on) => onEnable({ [n.name]: on })} />
                 </div>
               )
             })}
-            {!nodes.length && <p className="hint">Nessuna VM o container nel lab.</p>}
+            {!nodes.length && <p className="hint">{t('labview.noVmOrContainer')}</p>}
           </div>
 
           <div className="cfg-edit">
             {selNode ? <>
               <div className="cfg-edit-head">
                 <Icon name={selTpl?.icon} size={20} />
-                <div className="grow"><b>{selNode.name}</b> <span className="muted small">· set «{cur}»{selNode.startup_config ? '' : ' · startup-config OFF'}</span></div>
-                {changed && <span className="pill dirty">non salvata</span>}
-                <button className="primary" disabled={!changed} onClick={saveCfg}><Ui name="save" size={14} /> Salva</button>
+                <div className="grow"><b>{selNode.name}</b> <span className="muted small">· {t('labview.setLabel', { set: cur })}{selNode.startup_config ? '' : ` · ${t('labview.cfgOff')}`}</span></div>
+                {changed && <span className="pill dirty">{t('labview.unsavedF')}</span>}
+                <button className="primary" disabled={!changed} onClick={saveCfg}><Ui name="save" size={14} /> {t('common.save')}</button>
               </div>
-              <textarea className="code" spellCheck={false} value={draft} placeholder={`! configurazione di ${selNode.name}\nhostname ${selNode.name}\n!`}
+              <textarea className="code" spellCheck={false} value={draft} placeholder={t('labview.cfgPlaceholder', { n: selNode.name })}
                 onChange={(e) => { setDraft(e.target.value); setChanged(true) }}
                 onKeyDown={(e) => { if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); e.stopPropagation(); saveCfg() } }} />
               <p className="hint">{configHint(selTpl)}</p>
-            </> : <p className="hint">Seleziona un nodo.</p>}
+            </> : <p className="hint">{t('labview.selectNode')}</p>}
           </div>
         </div>
       </div>
@@ -2076,31 +2085,32 @@ function Markdown({ text }) {
 
 // docked side panel (left), so the guide/notes stay visible while you work on the topology
 function GuidePanel({ lab, generated, readOnly, onClose, onChange }) {
+  useLang()
   const field = generated ? 'instructions' : 'notes'
   const cur = lab[field] || ''
   const [edit, setEdit] = useState(!cur && !readOnly)
   const [text, setText] = useState(cur)
   useEffect(() => { setText(lab[field] || '') }, [lab, field]) // eslint-disable-line react-hooks/exhaustive-deps
-  const title = generated ? 'Guida del lab' : 'Note del lab'
-  const sub = generated ? 'Obiettivo, passi e soluzione' : 'Appunti liberi su questo lab'
+  const title = generated ? t('labview.guideTitle') : t('labview.notesTitle')
+  const sub = generated ? t('labview.guideSub') : t('labview.notesSub')
   return (
     <aside className="guide-dock">
       <div className="guide-dock-head">
         <span className="gd-ico"><Ui name="info" size={17} /></span>
         <div className="grow"><h3>{title}</h3><small className="muted">{sub}</small></div>
-        {!readOnly && !edit && <button className="icon-btn" title="Modifica" onClick={() => setEdit(true)}><Ui name="edit" size={15} /></button>}
-        <button className="icon-btn" title="Chiudi" onClick={onClose}><Ui name="close" size={16} /></button>
+        {!readOnly && !edit && <button className="icon-btn" title={t('labview.edit')} onClick={() => setEdit(true)}><Ui name="edit" size={15} /></button>}
+        <button className="icon-btn" title={t('common.close')} onClick={onClose}><Ui name="close" size={16} /></button>
       </div>
       <div className="guide-dock-body">
         {edit ? <>
           <textarea className="code guide-edit" value={text} onChange={(e) => setText(e.target.value)}
-            placeholder={generated ? '# Titolo\n## Obiettivo\n…\n## Soluzione\n```\nconfig\n```' : 'Scrivi qui le tue note (markdown)…'} />
+            placeholder={generated ? t('labview.guidePlaceholder') : t('labview.notesPlaceholder')} />
           <div className="row-end">
-            {cur && <button type="button" className="ghost" onClick={() => { setText(cur); setEdit(false) }}>Annulla</button>}
-            {!readOnly && <button type="button" className="primary" onClick={() => { onChange(field, text); setEdit(false) }}>Salva</button>}
+            {cur && <button type="button" className="ghost" onClick={() => { setText(cur); setEdit(false) }}>{t('common.cancel')}</button>}
+            {!readOnly && <button type="button" className="primary" onClick={() => { onChange(field, text); setEdit(false) }}>{t('common.save')}</button>}
           </div>
         </> : (cur ? <div className="guide-view"><Markdown text={cur} /></div>
-          : <p className="hint">{generated ? 'Questo lab non ha ancora una guida.' : 'Nessuna nota.'} {readOnly ? '' : 'Clicca ✎ per scrivere.'}</p>)}
+          : <p className="hint">{generated ? t('labview.noGuide') : t('labview.noNote')} {readOnly ? '' : t('labview.clickToWrite')}</p>)}
       </div>
     </aside>
   )
@@ -2122,6 +2132,7 @@ function Spark({ data }) {
 }
 
 export function StatusDialog({ onClose, onError }) {
+  useLang()
   const [s, setS] = useState(null)
   const [hist, setHist] = useState({ cpu: [], mem: [], disk: [] })
   useEffect(() => {
@@ -2148,7 +2159,7 @@ export function StatusDialog({ onClose, onError }) {
     const cls = cur == null ? 'na' : cur > 90 ? 'hot' : cur > 75 ? 'warn' : 'ok'
     return (
       <div className={`chart-card ${cls}`} key={label}>
-        <div className="chart-top"><span>{label}</span><b>{cur == null ? 'n/d' : `${cur}%`}</b></div>
+        <div className="chart-top"><span>{label}</span><b>{cur == null ? t('labview.na') : `${cur}%`}</b></div>
         <Spark data={data} />
         <div className="chart-sub">{detail}</div>
       </div>
@@ -2157,28 +2168,28 @@ export function StatusDialog({ onClose, onError }) {
   const uptime = (sec) => {
     if (!sec) return ''
     const d = Math.floor(sec / 86400), hh = Math.floor((sec % 86400) / 3600), mm = Math.floor((sec % 3600) / 60)
-    return ' · attivo da ' + [d && `${d}g`, (d || hh) && `${hh}h`, `${mm}m`].filter(Boolean).join(' ')
+    return t('labview.uptimePrefix') + [d && `${d}g`, (d || hh) && `${hh}h`, `${mm}m`].filter(Boolean).join(' ')
   }
   return (
     <div className="modal-bg" onClick={onClose}>
       <div className="modal wide" onClick={(e) => e.stopPropagation()}>
-        <ModalHead icon="status" title="Stato server" sub={h ? `${h.hostname} · NetSO v${s.version}${uptime(s.uptime_seconds)}` : 'Caricamento…'} onClose={onClose} />
+        <ModalHead icon="status" title={t('labview.serverStatusShort')} sub={h ? `${h.hostname} · NetSO v${s.version}${uptime(s.uptime_seconds)}` : t('labview.loading')} onClose={onClose} />
         {!h ? <div className="chk-grid"><span className="spin" /></div> : <>
           <div className="stat-grid">
-            <div><b>{s.labs.running}/{s.labs.total}</b><span>lab accesi</span></div>
-            <div><b>{s.labs.nodes_running}</b><span>nodi accesi</span></div>
+            <div><b>{s.labs.running}/{s.labs.total}</b><span>{t('labview.labsUp')}</span></div>
+            <div><b>{s.labs.nodes_running}</b><span>{t('labview.nodesUp')}</span></div>
             <div><b>{h.cpus}</b><span>CPU</span></div>
           </div>
           <div className="chart-grid">
-            {chart('Carico CPU', s.load ? Math.round((s.load[0] / (h.cpus || 1)) * 100) : null, hist.cpu,
-              s.load ? `load ${s.load.map((x) => x.toFixed(2)).join(' · ')}` : 'solo su Linux')}
-            {chart('Memoria', s.memory ? s.memory.percent : null, hist.mem,
-              s.memory ? `${(s.memory.used_mb / 1024).toFixed(1)} / ${(s.memory.total_mb / 1024).toFixed(1)} GB` : 'solo su Linux')}
-            {chart('Disco', s.disks?.home ? s.disks.home.percent : null, hist.disk,
-              s.disks?.home ? `${s.disks.home.used_gb} / ${s.disks.home.total_gb} GB · liberi ${s.disks.home.free_gb}` : '')}
+            {chart(t('labview.cpuLoad'), s.load ? Math.round((s.load[0] / (h.cpus || 1)) * 100) : null, hist.cpu,
+              s.load ? `load ${s.load.map((x) => x.toFixed(2)).join(' · ')}` : t('labview.linuxOnly'))}
+            {chart(t('labview.memory'), s.memory ? s.memory.percent : null, hist.mem,
+              s.memory ? `${(s.memory.used_mb / 1024).toFixed(1)} / ${(s.memory.total_mb / 1024).toFixed(1)} GB` : t('labview.linuxOnly'))}
+            {chart(t('labview.disk'), s.disks?.home ? s.disks.home.percent : null, hist.disk,
+              s.disks?.home ? `${s.disks.home.used_gb} / ${s.disks.home.total_gb} GB · ${t('labview.free')} ${s.disks.home.free_gb}` : '')}
           </div>
           <div className="chk-grid">
-            {chk(h.kvm, 'KVM (accelerazione VM)')}{chk(h.qemu, 'QEMU')}{chk(h.docker, 'Docker')}{chk(h.telnet, 'telnet')}
+            {chk(h.kvm, t('labview.kvm'))}{chk(h.qemu, 'QEMU')}{chk(h.docker, 'Docker')}{chk(h.telnet, 'telnet')}
           </div>
         </>}
       </div>
@@ -2202,11 +2213,12 @@ function LinkEnd({ lab, tplByName, ep, other, onChange, locked }) {
   )
 }
 
-const LINE_TYPES = [['solid', 'Continua'], ['dashed', 'Tratteggiata'], ['dotted', 'Punteggiata']]
-const LINE_SHAPES = [['straight', 'Dritta'], ['curved', 'Curva'], ['elbow', 'A gomito']]
+const LINE_TYPES = [['solid', 'labview.line.solid'], ['dashed', 'labview.line.dashed'], ['dotted', 'labview.line.dotted']]
+const LINE_SHAPES = [['straight', 'labview.shape.straight'], ['curved', 'labview.shape.curved'], ['elbow', 'labview.shape.elbow']]
 
 // Canvas look of a link: colour, line type, width, shape, label
 function LinkLook({ link, locked, onChange }) {
+  useLang()
   const color = link.color || null
   const w = link.width || 2
   const preview = (type, shape) => {
@@ -2220,91 +2232,94 @@ function LinkLook({ link, locked, onChange }) {
   }
   return (
     <div className="look">
-      <h4>Aspetto</h4>
+      <h4>{t('labview.appearance')}</h4>
       <div className="swatches">
-        <button className={`sw auto ${!color ? 'on' : ''}`} title="Colore del tema" disabled={locked} onClick={() => onChange({ color: null })}><Ui name="refresh" size={12} /></button>
+        <button className={`sw auto ${!color ? 'on' : ''}`} title={t('labview.themeColor')} disabled={locked} onClick={() => onChange({ color: null })}><Ui name="refresh" size={12} /></button>
         {LINK_COLORS.map((c) => (
           <button key={c} className={`sw ${color === c ? 'on' : ''}`} style={{ background: c }} title={c} disabled={locked} onClick={() => onChange({ color: c })} />
         ))}
-        <label className={`sw pick ${color && !LINK_COLORS.includes(color) ? 'on' : ''}`} title="Colore personalizzato" style={color && !LINK_COLORS.includes(color) ? { background: color } : undefined}>
+        <label className={`sw pick ${color && !LINK_COLORS.includes(color) ? 'on' : ''}`} title={t('labview.customColor')} style={color && !LINK_COLORS.includes(color) ? { background: color } : undefined}>
           <Ui name="plus" size={12} />
           <input type="color" disabled={locked} value={color || '#8b7bff'} onChange={(e) => onChange({ color: e.target.value })} />
         </label>
       </div>
       <div className="seg3">
         {LINE_TYPES.map(([k, label]) => (
-          <button key={k} className={(link.style || 'solid') === k ? 'on' : ''} disabled={locked} title={label}
-            onClick={() => onChange({ style: k === 'solid' ? null : k })}>{preview(k, null)}<span>{label}</span></button>
+          <button key={k} className={(link.style || 'solid') === k ? 'on' : ''} disabled={locked} title={t(label)}
+            onClick={() => onChange({ style: k === 'solid' ? null : k })}>{preview(k, null)}<span>{t(label)}</span></button>
         ))}
       </div>
       <div className="seg3">
         {LINE_SHAPES.map(([k, label]) => (
-          <button key={k} className={(link.shape || 'straight') === k ? 'on' : ''} disabled={locked} title={label}
-            onClick={() => onChange({ shape: k === 'straight' ? null : k })}>{preview(null, k)}<span>{label}</span></button>
+          <button key={k} className={(link.shape || 'straight') === k ? 'on' : ''} disabled={locked} title={t(label)}
+            onClick={() => onChange({ shape: k === 'straight' ? null : k })}>{preview(null, k)}<span>{t(label)}</span></button>
         ))}
       </div>
       {(link.shape === 'curved' || link.shape === 'elbow') && (() => {
         const def = link.shape === 'curved' ? 28 : 0
         const v = link.bend ?? def
         return (
-          <label className="field range"><span>Curvatura <b>{v}</b></span>
+          <label className="field range"><span>{t('labview.curvature')} <b>{v}</b></span>
             <input type="range" min="-100" max="100" value={v} disabled={locked}
               onChange={(e) => { const n = Number(e.target.value); onChange({ bend: n === def ? null : n }) }} />
           </label>
         )
       })()}
-      <label className="field range"><span>Spessore <b>{w}px</b></span>
+      <label className="field range"><span>{t('labview.thickness')} <b>{w}px</b></span>
         <input type="range" min="1" max="8" value={w} disabled={locked} onChange={(e) => onChange({ width: Number(e.target.value) === 2 ? null : Number(e.target.value) })} />
       </label>
-      <label className="field"><span>Etichetta</span>
-        <input maxLength={40} placeholder="es. uplink, WAN, trunk…" value={link.label || ''} disabled={locked} onChange={(e) => onChange({ label: e.target.value })} />
+      <label className="field"><span>{t('labview.label')}</span>
+        <input maxLength={40} placeholder={t('labview.labelPlaceholder')} value={link.label || ''} disabled={locked} onChange={(e) => onChange({ label: e.target.value })} />
       </label>
     </div>
   )
 }
 
 function LinkImpairments({ link, onChange, running, onApply }) {
+  useLang()
   const num = (k) => (e) => onChange({ [k]: e.target.value === '' ? undefined : Number(e.target.value) })
   const active = link.delay_ms != null || link.jitter_ms != null || link.loss_pct != null || link.rate_kbit != null
   return (
     <div className="impair">
-      <h4>Condizionamento <small className="muted">(tc netem)</small></h4>
+      <h4>{t('labview.conditioning')} <small className="muted">(tc netem)</small></h4>
       <div className="grid2">
-        <label className="field"><span>Ritardo ms</span>
+        <label className="field"><span>{t('labview.delayMs')}</span>
           <input type="number" min="0" step="1" value={link.delay_ms ?? ''} onChange={num('delay_ms')} /></label>
         <label className="field"><span>Jitter ms</span>
           <input type="number" min="0" step="1" value={link.jitter_ms ?? ''} onChange={num('jitter_ms')} /></label>
-        <label className="field"><span>Perdita %</span>
+        <label className="field"><span>{t('labview.lossPct')}</span>
           <input type="number" min="0" max="100" step="0.1" value={link.loss_pct ?? ''} onChange={num('loss_pct')} /></label>
-        <label className="field"><span>Banda kbit</span>
+        <label className="field"><span>{t('labview.bandwidthKbit')}</span>
           <input type="number" min="0" step="100" value={link.rate_kbit ?? ''} onChange={num('rate_kbit')} /></label>
       </div>
-      {running && <button className="wide" onClick={onApply}><Ui name="bolt" size={15} /> Applica ora</button>}
-      {!active && <p className="hint">Vuoto = cavo ideale. Il ritardo vale per direzione (RTT ≈ 2×).</p>}
+      {running && <button className="wide" onClick={onApply}><Ui name="bolt" size={15} /> {t('labview.applyNow')}</button>}
+      {!active && <p className="hint">{t('labview.hint.impair')}</p>}
     </div>
   )
 }
 
 function MultiPanel({ ids, state, locked, onBulk, onConsole, onDelete }) {
+  useLang()
   return (
     <div className="panel">
-      <div className="panel-head"><span className="ph-ico"><Ui name="nodes" size={20} /></span><div><h3>{ids.length} nodi selezionati</h3><small>Azioni di gruppo</small></div></div>
+      <div className="panel-head"><span className="ph-ico"><Ui name="nodes" size={20} /></span><div><h3>{t('labview.nNodesSelected', { n: ids.length })}</h3><small>{t('labview.groupActions')}</small></div></div>
       <div className="actions">
-        <button className="primary" onClick={() => onBulk('start')}><Ui name="play" size={14} /> Avvia</button>
-        <button onClick={() => onBulk('stop')}><Ui name="stop" size={14} /> Ferma</button>
-        <button onClick={onConsole}><Ui name="console" size={14} /> Consolle</button>
-        <button className="ghost" onClick={() => onBulk('wipe')}><Ui name="wipe" size={14} /> Azzera</button>
+        <button className="primary" onClick={() => onBulk('start')}><Ui name="play" size={14} /> {t('labview.start')}</button>
+        <button onClick={() => onBulk('stop')}><Ui name="stop" size={14} /> {t('labview.stop')}</button>
+        <button onClick={onConsole}><Ui name="console" size={14} /> {t('labview.console')}</button>
+        <button className="ghost" onClick={() => onBulk('wipe')}><Ui name="wipe" size={14} /> {t('labview.wipe')}</button>
       </div>
       <ul className="nodes-list">
         {ids.map((n) => <li key={n}><span className={`dot ${state?.nodes?.[n]?.status || 'stopped'}`} /><span className="grow">{n}</span></li>)}
       </ul>
-      <button className="danger wide" onClick={onDelete} disabled={locked}><Ui name="trash" size={15} /> Elimina selezionati</button>
+      <button className="danger wide" onClick={onDelete} disabled={locked}><Ui name="trash" size={15} /> {t('labview.deleteSelected')}</button>
     </div>
   )
 }
 
 // VLANs of a switch node: one row per connected port (access VLAN or trunk)
 function SwitchPorts({ node, lab, canEdit, running, onChange, onApply, bare }) {
+  useLang()
   const ports = node.ports || {}
   const rows = lab.links.map((l) => l.endpoints.map(splitEp)).filter((eps) => eps.some(([n]) => n === node.name))
     .map((eps) => { const me = eps.find(([n]) => n === node.name), other = eps.find((e) => e !== me); return { port: me[1], peer: `${other[0]} ${other[1]}` } })
@@ -2315,7 +2330,7 @@ function SwitchPorts({ node, lab, canEdit, running, onChange, onApply, bare }) {
   }
   const body = (
     <>
-      {!rows.length ? <p className="hint">Collega dei dispositivi allo switch per configurare le porte.</p> : (
+      {!rows.length ? <p className="hint">{t('labview.sw.connectDevices')}</p> : (
         <div className="vlan-tbl">
           {rows.map(({ port, peer }) => {
             const c = ports[port]
@@ -2325,12 +2340,12 @@ function SwitchPorts({ node, lab, canEdit, running, onChange, onApply, bare }) {
                 <div className="vr-head"><code>{port}</code><span className="muted small">→ {peer}</span></div>
                 <div className="vr-cfg">
                   <select value={mode} disabled={!canEdit} onChange={(e) => set(port, e.target.value === 'none' ? null : e.target.value === 'access' ? { mode: 'access', vlan: c?.vlan || 10 } : { mode: 'trunk', vlans: c?.vlans || '1-4094', native: c?.native || 1 })}>
-                    <option value="none">predefinita (VLAN 1)</option><option value="access">access</option><option value="trunk">trunk</option>
+                    <option value="none">{t('labview.sw.default')}</option><option value="access">access</option><option value="trunk">trunk</option>
                   </select>
                   {mode === 'access' && <input type="number" min="1" max="4094" title="VLAN" value={c.vlan} disabled={!canEdit} onChange={(e) => set(port, { ...c, vlan: Number(e.target.value) || 1 })} />}
                   {mode === 'trunk' && <>
-                    <input className="mono" title="VLAN permesse (es. 10,20,30-40)" value={c.vlans} disabled={!canEdit} onChange={(e) => set(port, { ...c, vlans: e.target.value })} />
-                    <input type="number" min="1" max="4094" title="VLAN nativa (senza tag)" value={c.native} disabled={!canEdit} onChange={(e) => set(port, { ...c, native: Number(e.target.value) || 1 })} />
+                    <input className="mono" title={t('labview.sw.allowedVlans')} value={c.vlans} disabled={!canEdit} onChange={(e) => set(port, { ...c, vlans: e.target.value })} />
+                    <input type="number" min="1" max="4094" title={t('labview.sw.nativeVlan')} value={c.native} disabled={!canEdit} onChange={(e) => set(port, { ...c, native: Number(e.target.value) || 1 })} />
                   </>}
                 </div>
               </div>
@@ -2338,23 +2353,24 @@ function SwitchPorts({ node, lab, canEdit, running, onChange, onApply, bare }) {
           })}
         </div>
       )}
-      <p className="hint">Access = una VLAN senza tag · Trunk = VLAN con tag (es. <code>10,20,30-40</code>) + nativa senza tag. Senza configurazione lo switch non separa le VLAN.</p>
-      {running && <button type="button" className="wide" onClick={onApply}><Ui name="bolt" size={14} /> Salva e applica ora</button>}
+      <p className="hint">{t('labview.sw.hint1')}<code>10,20,30-40</code>{t('labview.sw.hint2')}</p>
+      {running && <button type="button" className="wide" onClick={onApply}><Ui name="bolt" size={14} /> {t('labview.saveApplyNow')}</button>}
     </>
   )
   return bare ? body : (
-    <Section title="VLAN delle porte" extra={Object.keys(ports).length ? <span className="pill running">802.1Q</span> : null}>{body}</Section>
+    <Section title={t('labview.portVlans')} extra={Object.keys(ports).length ? <span className="pill running">802.1Q</span> : null}>{body}</Section>
   )
 }
 
 // side panel of a drawing
 function AnnPanel({ a, locked, onChange, onDelete, onDuplicate, onImage }) {
-  const label = Object.fromEntries(ANN_TYPES.map(([t, l]) => [t, l]))[a.type]
+  useLang()
+  const label = t(`labview.ann.${a.type}`)
   const swatches = (key, allowNone) => (
     <div className="swatches">
-      {allowNone && <button className={`sw auto ${!a[key] ? 'on' : ''}`} title="Nessuno" disabled={locked} onClick={() => onChange({ [key]: null })}><Ui name="close" size={11} /></button>}
+      {allowNone && <button className={`sw auto ${!a[key] ? 'on' : ''}`} title={t('labview.none')} disabled={locked} onClick={() => onChange({ [key]: null })}><Ui name="close" size={11} /></button>}
       {ANN_COLORS.map((c) => <button key={c} className={`sw ${a[key] === c ? 'on' : ''}`} style={{ background: c }} disabled={locked} onClick={() => onChange({ [key]: c })} />)}
-      <label className="sw pick" title="Colore personalizzato" style={a[key] && !ANN_COLORS.includes(a[key]) ? { background: a[key] } : undefined}>
+      <label className="sw pick" title={t('labview.customColor')} style={a[key] && !ANN_COLORS.includes(a[key]) ? { background: a[key] } : undefined}>
         <Ui name="plus" size={11} /><input type="color" disabled={locked} value={a[key] || '#8b7bff'} onChange={(e) => onChange({ [key]: e.target.value })} />
       </label>
     </div>
@@ -2364,44 +2380,44 @@ function AnnPanel({ a, locked, onChange, onDelete, onDuplicate, onImage }) {
   )
   return (
     <div className="panel">
-      <div className="panel-head"><span className="ph-ico"><Ui name="edit" size={20} /></span><div><h3>{label}</h3><small>Disegno sul foglio · non influisce sulla rete</small></div></div>
+      <div className="panel-head"><span className="ph-ico"><Ui name="edit" size={20} /></span><div><h3>{label}</h3><small>{t('labview.ann.sub')}</small></div></div>
       {['text', 'rect', 'ellipse'].includes(a.type) && (
-        <Section title="Testo">
-          <textarea rows={3} value={a.text} disabled={locked} placeholder="Scrivi qui (anche doppio clic sul foglio)" onChange={(e) => onChange({ text: e.target.value })} />
+        <Section title={t('labview.text')}>
+          <textarea rows={3} value={a.text} disabled={locked} placeholder={t('labview.ann.textPlaceholder')} onChange={(e) => onChange({ text: e.target.value })} />
           <div className="ann-row">
-            <label className="field range"><span>Dimensione <b>{a.font_size}</b></span><input type="range" min="8" max="64" value={a.font_size} disabled={locked} onChange={(e) => onChange({ font_size: Number(e.target.value) })} /></label>
+            <label className="field range"><span>{t('labview.size')} <b>{a.font_size}</b></span><input type="range" min="8" max="64" value={a.font_size} disabled={locked} onChange={(e) => onChange({ font_size: Number(e.target.value) })} /></label>
             <div className="seg-mini">
               <button className={a.bold ? 'on' : ''} disabled={locked} onClick={() => onChange({ bold: !a.bold })}><b>G</b></button>
               <button className={a.italic ? 'on' : ''} disabled={locked} onClick={() => onChange({ italic: !a.italic })}><i>C</i></button>
             </div>
           </div>
-          {seg('align', [['left', 'Sinistra'], ['center', 'Centro'], ['right', 'Destra']])}
+          {seg('align', [['left', t('labview.left')], ['center', t('labview.center')], ['right', t('labview.right')]])}
         </Section>
       )}
-      <Section title="Colori">
-        <div className="field"><span>{a.type === 'text' ? 'Colore del testo' : a.type === 'line' ? 'Colore della linea' : 'Bordo'}</span>{swatches('color')}</div>
-        {['rect', 'ellipse', 'text'].includes(a.type) && <div className="field"><span>Riempimento</span>{swatches('fill', true)}</div>}
-        {(a.fill || a.type === 'image') && <label className="field range"><span>Opacità <b>{Math.round(a.opacity * 100)}%</b></span>
+      <Section title={t('labview.colors')}>
+        <div className="field"><span>{a.type === 'text' ? t('labview.textColor') : a.type === 'line' ? t('labview.lineColor') : t('labview.border')}</span>{swatches('color')}</div>
+        {['rect', 'ellipse', 'text'].includes(a.type) && <div className="field"><span>{t('labview.fill')}</span>{swatches('fill', true)}</div>}
+        {(a.fill || a.type === 'image') && <label className="field range"><span>{t('labview.opacity')} <b>{Math.round(a.opacity * 100)}%</b></span>
           <input type="range" min="5" max="100" value={Math.round(a.opacity * 100)} disabled={locked} onChange={(e) => onChange({ opacity: Number(e.target.value) / 100 })} /></label>}
       </Section>
       {a.type !== 'image' && (
-        <Section title={a.type === 'line' ? 'Linea' : 'Bordo'}>
-          {seg('border', a.type === 'line' ? [['solid', 'Continua'], ['dashed', 'Tratteggiata'], ['dotted', 'Punteggiata']] : [['solid', 'Continuo'], ['dashed', 'Tratteggiato'], ['dotted', 'Punti'], ['none', 'Nessuno']])}
-          <label className="field range"><span>Spessore <b>{a.border_width}px</b></span><input type="range" min="1" max="10" value={a.border_width} disabled={locked} onChange={(e) => onChange({ border_width: Number(e.target.value) })} /></label>
-          {a.type === 'rect' && <label className="field range"><span>Angoli arrotondati <b>{a.radius}px</b></span><input type="range" min="0" max="60" value={a.radius} disabled={locked} onChange={(e) => onChange({ radius: Number(e.target.value) })} /></label>}
+        <Section title={a.type === 'line' ? t('labview.line') : t('labview.border')}>
+          {seg('border', a.type === 'line' ? [['solid', t('labview.line.solid')], ['dashed', t('labview.line.dashed')], ['dotted', t('labview.line.dotted')]] : [['solid', t('labview.border.solid')], ['dashed', t('labview.border.dashed')], ['dotted', t('labview.border.dotted')], ['none', t('labview.border.none')]])}
+          <label className="field range"><span>{t('labview.thickness')} <b>{a.border_width}px</b></span><input type="range" min="1" max="10" value={a.border_width} disabled={locked} onChange={(e) => onChange({ border_width: Number(e.target.value) })} /></label>
+          {a.type === 'rect' && <label className="field range"><span>{t('labview.roundedCorners')} <b>{a.radius}px</b></span><input type="range" min="0" max="60" value={a.radius} disabled={locked} onChange={(e) => onChange({ radius: Number(e.target.value) })} /></label>}
           {a.type === 'line' && <>
-            <div className="field"><span>Frecce</span>{seg('arrow', [['none', 'Nessuna'], ['end', '→'], ['start', '←'], ['both', '↔']])}</div>
-            <button className="wide" disabled={locked} onClick={() => onChange({ flip: !a.flip })}><Ui name="refresh" size={14} /> Inverti diagonale</button>
+            <div className="field"><span>{t('labview.arrows')}</span>{seg('arrow', [['none', t('labview.noneF')], ['end', '→'], ['start', '←'], ['both', '↔']])}</div>
+            <button className="wide" disabled={locked} onClick={() => onChange({ flip: !a.flip })}><Ui name="refresh" size={14} /> {t('labview.flipDiagonal')}</button>
           </>}
         </Section>
       )}
-      {a.type === 'image' && <Section title="Immagine"><button className="wide" disabled={locked} onClick={onImage}><Ui name="upload" size={14} /> Cambia immagine</button></Section>}
-      <Section title="Livello">
-        {seg('z', [[-1, 'Dietro i dispositivi'], [1, 'Sopra i dispositivi']])}
+      {a.type === 'image' && <Section title={t('labview.image')}><button className="wide" disabled={locked} onClick={onImage}><Ui name="upload" size={14} /> {t('labview.changeImage')}</button></Section>}
+      <Section title={t('labview.layer')}>
+        {seg('z', [[-1, t('labview.behindDevices')], [1, t('labview.aboveDevices')]])}
       </Section>
       <div className="row-end" style={{ marginTop: 14 }}>
-        <button disabled={locked} onClick={onDuplicate}><Ui name="copy" size={14} /> Duplica</button>
-        <button className="danger" disabled={locked} onClick={onDelete}><Ui name="trash" size={14} /> Elimina</button>
+        <button disabled={locked} onClick={onDuplicate}><Ui name="copy" size={14} /> {t('labview.duplicate')}</button>
+        <button className="danger" disabled={locked} onClick={onDelete}><Ui name="trash" size={14} /> {t('common.delete')}</button>
       </div>
     </div>
   )
@@ -2409,10 +2425,11 @@ function AnnPanel({ a, locked, onChange, onDelete, onDuplicate, onImage }) {
 
 // icon size control used inside the node's right-click menu (EVE-NG style "(px)" field)
 function SizeRow({ value, onChange, disabled }) {
+  useLang()
   return (
     <div className="size-row">
       <span className="g"><Ui name="fit" size={16} /></span>
-      <span className="grow">Dimensione icona</span>
+      <span className="grow">{t('labview.iconSize')}</span>
       <button className="mini" disabled={disabled || value <= 50} onClick={() => onChange(Math.max(50, value - 25))}>−</button>
       <b>{value}%</b>
       <button className="mini" disabled={disabled || value >= 250} onClick={() => onChange(Math.min(250, value + 25))}>+</button>
@@ -2424,6 +2441,7 @@ const ICON_NAMES = Object.keys(DEVICE_COLORS)
 
 // Full node editor (PNETLab "Edit node" style), opened from the right-click menu or double click
 function NodeEditDialog({ node, tpl, ns, lab, locked, running, configSet, onClose, onSave, onError, onEnableConfig, onEditConfig, onLive, onApplyNow, labRunning, onReloadTemplates }) {
+  useLang()
   const [f, setF] = useState(() => ({
     name: node.name, description: node.description || '', image: node.image || '', icon: node.icon || '',
     cpus: node.cpus ?? '', ram: node.ram ?? '', nics: node.nics ?? '', nic_model: node.nic_model || '', console: node.console || '',
@@ -2476,106 +2494,106 @@ function NodeEditDialog({ node, tpl, ns, lab, locked, running, configSet, onClos
       <form className="modal sheet" onClick={(e) => e.stopPropagation()} onSubmit={submit}>
         <div className="sheet-head">
           <span className="sheet-ico"><Icon name={f.icon || tpl.icon} size={34} /></span>
-          <div className="grow"><h3>Modifica nodo</h3><small className="muted">{tpl.name}</small></div>
-          <span className={`pill ${ns?.status || 'stopped'}`}>{running ? 'acceso' : 'spento'}</span>
-          <button type="button" className="icon-btn" onClick={onClose} title="Chiudi"><Ui name="close" size={16} /></button>
+          <div className="grow"><h3>{t('labview.editNode')}</h3><small className="muted">{tpl.name}</small></div>
+          <span className={`pill ${ns?.status || 'stopped'}`}>{running ? t('labview.on') : t('labview.off')}</span>
+          <button type="button" className="icon-btn" onClick={onClose} title={t('common.close')}><Ui name="close" size={16} /></button>
         </div>
 
         <div className="sheet-body">
-          {running && vm && <div className="warning small">Il nodo è acceso: nome, interfacce, NIC e MAC si possono cambiare solo da spento; CPU/RAM/immagine valgono al prossimo avvio.</div>}
+          {running && vm && <div className="warning small">{t('labview.nodeRunningWarn')}</div>}
 
-          <fieldset><legend>Generale</legend>
+          <fieldset><legend>{t('labview.general')}</legend>
             <div className="grid2">
-              <label className="field"><span>Nome</span><input required pattern="[A-Za-z][A-Za-z0-9 _\-]{0,31}" disabled={hard} value={f.name} onChange={set('name')} /></label>
+              <label className="field"><span>{t('labview.name')}</span><input required pattern="[A-Za-z][A-Za-z0-9 _\-]{0,31}" disabled={hard} value={f.name} onChange={set('name')} /></label>
               <label className="field"><span>Template</span><input value={tpl.name} disabled /></label>
             </div>
-            <label className="field"><span>Descrizione</span><input placeholder={tpl.description} value={f.description} onChange={set('description')} /></label>
+            <label className="field"><span>{t('labview.description')}</span><input placeholder={tpl.description} value={f.description} onChange={set('description')} /></label>
           </fieldset>
 
           {vm && <fieldset><legend>Hardware</legend>
-            <label className="field"><span>Immagine <button type="button" className="icon-btn inline" title="Aggiorna elenco" onClick={(e) => { e.preventDefault(); onReloadTemplates?.() }}><Ui name="refresh" size={13} /></button></span>
+            <label className="field"><span>{t('labview.image')} <button type="button" className="icon-btn inline" title={t('labview.refreshList')} onClick={(e) => { e.preventDefault(); onReloadTemplates?.() }}><Ui name="refresh" size={13} /></button></span>
               <select value={f.image} onChange={set('image')}>
-                <option value="">{tpl.image}{imgOpts.some((i) => i.name === tpl.image) ? '' : ' — non presente'}</option>
+                <option value="">{tpl.image}{imgOpts.some((i) => i.name === tpl.image) ? '' : t('labview.notPresent')}</option>
                 {imgOpts.filter((i) => i.name !== tpl.image).map((i) => <option key={i.name} value={i.name}>{i.name}</option>)}
-                {f.image && !imgOpts.some((i) => i.name === f.image) && <option value={f.image}>{f.image} — non presente</option>}
+                {f.image && !imgOpts.some((i) => i.name === f.image) && <option value={f.image}>{f.image}{t('labview.notPresent')}</option>}
               </select>
             </label>
             <div className="grid3">
               <label className="field"><span>CPU</span><input type="number" min="1" max="64" placeholder={tpl.cpus} value={f.cpus} onChange={set('cpus')} /></label>
               <label className="field"><span>RAM (MB)</span><input type="number" min="64" step="64" placeholder={tpl.ram} value={f.ram} onChange={set('ram')} /></label>
-              <label className="field"><span>Interfacce</span><input type="number" min="1" max="32" placeholder={tpl.nics} disabled={hard} value={f.nics} onChange={set('nics')} /></label>
+              <label className="field"><span>{t('labview.interfaces')}</span><input type="number" min="1" max="32" placeholder={tpl.nics} disabled={hard} value={f.nics} onChange={set('nics')} /></label>
             </div>
             <p className="hint ifaces">{ifaces.slice(0, 12).join(' · ')}{ifaces.length > 12 ? ` … (${ifaces.length})` : ''}</p>
             {qemu && <div className="grid3">
-              <label className="field"><span>Modello NIC</span>
+              <label className="field"><span>{t('labview.nicModel')}</span>
                 <select disabled={hard} value={f.nic_model} onChange={set('nic_model')}>
                   <option value="">{tpl.nic_model} (template)</option>
                   {NIC_MODELS.filter((m) => m !== tpl.nic_model).map((m) => <option key={m}>{m}</option>)}
                 </select>
               </label>
-              <label className="field"><span>Consolle</span>
+              <label className="field"><span>{t('labview.console')}</span>
                 <select value={f.console} onChange={set('console')}>
                   <option value="">{consoleLabel(tpl.console)} (template)</option>
                   {CONSOLES.filter(([c]) => c !== tpl.console).map(([c, l]) => <option key={c} value={c}>{l}</option>)}
                 </select>
               </label>
-              <label className="field"><span>Primo MAC</span><input placeholder="automatico" disabled={hard} value={f.mac} onChange={set('mac')}
-                pattern="([0-9A-Fa-f]{2}[:\-]){5}[0-9A-Fa-f]{2}" title="aa:bb:cc:dd:ee:ff — le altre interfacce seguono (+1)" /></label>
+              <label className="field"><span>{t('labview.firstMac')}</span><input placeholder={t('labview.automatic')} disabled={hard} value={f.mac} onChange={set('mac')}
+                pattern="([0-9A-Fa-f]{2}[:\-]){5}[0-9A-Fa-f]{2}" title={t('labview.macTitle')} /></label>
             </div>}
-            {qemu && <label className="field"><span>Opzioni QEMU aggiuntive</span>
+            {qemu && <label className="field"><span>{t('labview.extraQemu')}</span>
               <input className="mono" placeholder={tpl.extra_args?.join(' ') || 'es. -cpu host -smp sockets=1'} value={f.extra} onChange={set('extra')} /></label>}
-            {docker && <label className="field"><span>Variabili d'ambiente <small className="muted">(una per riga, NOME=valore)</small></span>
+            {docker && <label className="field"><span>{t('labview.envVars')} <small className="muted">{t('labview.envHint')}</small></span>
               <textarea className="mono" rows={3} value={f.env} onChange={set('env')} /></label>}
           </fieldset>}
 
-          {vm && <fieldset><legend>Gestione</legend>
+          {vm && <fieldset><legend>{t('labview.management')}</legend>
             <div className="grid2">
-              <label className="field"><span>IP di gestione {docker && <small className="muted">(vuoto = automatico)</small>}</span>
-                <input className="mono" placeholder={docker ? '172.20.20.x automatico' : 'es. 172.20.20.11'} value={f.mgmt_ip} onChange={set('mgmt_ip')} disabled={docker && running} /></label>
-              {qemu ? <label className="field"><span>Interfaccia sulla rete di gestione</span>
+              <label className="field"><span>{t('labview.mgmtIp')} {docker && <small className="muted">{t('labview.emptyAuto')}</small>}</span>
+                <input className="mono" placeholder={docker ? t('labview.mgmtIpPlaceholderDocker') : t('labview.mgmtIpPlaceholderQemu')} value={f.mgmt_ip} onChange={set('mgmt_ip')} disabled={docker && running} /></label>
+              {qemu ? <label className="field"><span>{t('labview.mgmtIface')}</span>
                 <select value={f.mgmt_iface} disabled={hard} onChange={set('mgmt_iface')}>
-                  <option value="">nessuna</option>
+                  <option value="">{t('labview.mgmtNone')}</option>
                   {ifaces.filter((i) => !lab.links.some((l) => l.endpoints.includes(`${node.name}:${i}`))).map((i) => <option key={i}>{i}</option>)}
-                </select></label> : <div className="field"><span>Interfaccia</span><input value="eth0 (rete di gestione Docker)" disabled /></div>}
+                </select></label> : <div className="field"><span>{t('labview.interface')}</span><input value={t('labview.eth0Docker')} disabled /></div>}
             </div>
-            <p className="hint">{qemu ? 'L\'interfaccia scelta va sulla rete 172.20.20.0/24 insieme ai container; l\'IP va configurato anche dentro il dispositivo (es. nella startup config). Serve per Ansible/SSH e per l\'inventario.' : 'eth0 è sempre sulla rete di gestione 172.20.20.0/24.'}</p>
+            <p className="hint">{qemu ? t('labview.hint.mgmtQemu') : t('labview.hint.mgmtDocker')}</p>
           </fieldset>}
 
-          {tpl.kind === 'bridge' && <fieldset className="live"><legend>VLAN delle porte</legend>
+          {tpl.kind === 'bridge' && <fieldset className="live"><legend>{t('labview.portVlans')}</legend>
             <SwitchPorts node={node} lab={lab} canEdit={!locked} running={labRunning} onChange={onLive} onApply={onApplyNow} bare />
           </fieldset>}
-          {tpl.kind === 'nat' && <fieldset className="live"><legend>Rete NAT (internet)</legend>
-            <label className="field"><span>Subnet del lab</span>
-              <input placeholder="automatica (172.31.x.0/24)" value={node.subnet || ''} disabled={locked || running} onChange={(e) => onLive({ subnet: e.target.value || undefined })} /></label>
-            {ns?.subnet && <div className="kv"><span>Rete</span><b className="mono">{ns.subnet}</b><span>Gateway / DNS</span><b className="mono">{ns.subnet.replace(/\.0\/\d+$/, '.1')}</b><span>DHCP</span><b className="mono">.10 – .254</b></div>}
-            <p className="hint">Nei dispositivi: DHCP oppure un IP della subnet con gateway <code>.1</code>.</p>
+          {tpl.kind === 'nat' && <fieldset className="live"><legend>{t('labview.natNetwork')}</legend>
+            <label className="field"><span>{t('labview.labSubnet')}</span>
+              <input placeholder={t('labview.subnetAuto')} value={node.subnet || ''} disabled={locked || running} onChange={(e) => onLive({ subnet: e.target.value || undefined })} /></label>
+            {ns?.subnet && <div className="kv"><span>{t('labview.network')}</span><b className="mono">{ns.subnet}</b><span>{t('labview.gatewayDns')}</span><b className="mono">{ns.subnet.replace(/\.0\/\d+$/, '.1')}</b><span>DHCP</span><b className="mono">.10 – .254</b></div>}
+            <p className="hint">{t('labview.hint.natDevA')}<code>.1</code>.</p>
           </fieldset>}
-          {tpl.kind === 'vxlan' && <fieldset className="live"><legend>Collegamento verso un altro server (VXLAN)</legend>
+          {tpl.kind === 'vxlan' && <fieldset className="live"><legend>{t('labview.vxlanLink')}</legend>
             <div className="grid3">
-              <label className="field"><span>IP dell'altro server</span><input className="mono" placeholder="192.168.12.50" value={node.remote || ''} disabled={locked}
+              <label className="field"><span>{t('labview.otherServerIp')}</span><input className="mono" placeholder="192.168.12.50" value={node.remote || ''} disabled={locked}
                 onChange={(e) => onLive({ remote: e.target.value || undefined })} /></label>
               <label className="field"><span>VNI</span><input type="number" min="1" max="16777215" placeholder="5001" value={node.vni ?? ''} disabled={locked}
                 onChange={(e) => onLive({ vni: e.target.value === '' ? undefined : Number(e.target.value) })} /></label>
-              <label className="field"><span>Porta UDP</span><input type="number" placeholder="4789" value={node.dstport ?? ''} disabled={locked}
+              <label className="field"><span>{t('labview.udpPort')}</span><input type="number" placeholder="4789" value={node.dstport ?? ''} disabled={locked}
                 onChange={(e) => onLive({ dstport: e.target.value === '' ? undefined : Number(e.target.value) })} /></label>
             </div>
-            <p className="hint">Sull'altro server crea lo stesso nodo con l'IP di questo server e lo stesso VNI. MTU 1450 sul tunnel.</p>
+            <p className="hint">{t('labview.hint.vxlan1')}</p>
           </fieldset>}
-          {tpl.kind === 'external' && <fieldset><legend>Rete esterna</legend>
-            <label className="field"><span>Bridge dell'host</span><input placeholder={tpl.host_bridge} disabled={hard} value={f.host_bridge} onChange={set('host_bridge')} /></label>
+          {tpl.kind === 'external' && <fieldset><legend>{t('labview.externalNet')}</legend>
+            <label className="field"><span>{t('labview.hostBridge')}</span><input placeholder={tpl.host_bridge} disabled={hard} value={f.host_bridge} onChange={set('host_bridge')} /></label>
           </fieldset>}
 
-          {vm && <fieldset><legend>Startup config</legend>
+          {vm && <fieldset><legend>{t('labview.startupConfig')}</legend>
             <div className="cfg-inline">
               <Toggle on={!!node.startup_config} disabled={!supportsConfig(tpl)} onChange={onEnableConfig} />
-              <span className="grow muted small">{supportsConfig(tpl) ? <>All'avvio usa la config del set <b>{configSet}</b></> : 'Non supportata da questo template'}</span>
-              <button type="button" className="mini" onClick={onEditConfig}><Ui name="config" size={14} /> Modifica config</button>
+              <span className="grow muted small">{supportsConfig(tpl) ? <>{t('labview.usesConfigSet')} <b>{configSet}</b></> : t('labview.notSupportedByTemplate')}</span>
+              <button type="button" className="mini" onClick={onEditConfig}><Ui name="config" size={14} /> {t('labview.editConfig')}</button>
             </div>
           </fieldset>}
 
-          <fieldset><legend>Icona</legend>
+          <fieldset><legend>{t('labview.icon')}</legend>
             <div className="icon-pick">
-              <button type="button" className={!f.icon ? 'on' : ''} title={`Del template (${tpl.icon})`} onClick={() => set('icon')('')}><Icon name={tpl.icon} size={28} /><small>auto</small></button>
+              <button type="button" className={!f.icon ? 'on' : ''} title={t('labview.fromTemplate', { icon: tpl.icon })} onClick={() => set('icon')('')}><Icon name={tpl.icon} size={28} /><small>auto</small></button>
               {ICON_NAMES.map((ic) => (
                 <button type="button" key={ic} className={f.icon === ic ? 'on' : ''} title={ic} onClick={() => set('icon')(ic)}><Icon name={ic} size={28} /><small>{ic}</small></button>
               ))}
@@ -2587,33 +2605,33 @@ function NodeEditDialog({ node, tpl, ns, lab, locked, running, configSet, onClos
                   <Icon name={`line:${ic}`} size={30} /><small>{lineLabel(ic)}</small></button>
               ))}
             </div>
-            <span className="pick-sec">Icone personali <small className="muted">(SVG, PNG… caricate da te)</small></span>
+            <span className="pick-sec">{t('labview.customIcons')} <small className="muted">{t('labview.customIconsHint')}</small></span>
             <div className="icon-pick">
               {customIcons.map((ic) => (
                 <button type="button" key={ic.name} className={`has-del ${f.icon === `custom:${ic.name}` ? 'on' : ''}`} title={ic.name} onClick={() => set('icon')(`custom:${ic.name}`)}>
                   <Icon name={`custom:${ic.name}`} size={30} /><small>{ic.name}</small>
-                  <span className="pick-del" title="Elimina icona" onClick={(e) => { e.stopPropagation(); delIcon(ic.name) }}>×</span>
+                  <span className="pick-del" title={t('labview.deleteIcon')} onClick={(e) => { e.stopPropagation(); delIcon(ic.name) }}>×</span>
                 </button>
               ))}
-              <button type="button" className="icon-add" onClick={() => iconInput.current?.click()}><Ui name="upload" size={22} /><small>Aggiungi…</small></button>
+              <button type="button" className="icon-add" onClick={() => iconInput.current?.click()}><Ui name="upload" size={22} /><small>{t('labview.addDots')}</small></button>
               <input ref={iconInput} type="file" hidden accept=".svg,.png,.jpg,.jpeg,.gif,.webp" onChange={(e) => { addIcon(e.target.files[0]); e.target.value = '' }} />
             </div>
           </fieldset>
 
-          <fieldset><legend>Disegno</legend>
+          <fieldset><legend>{t('labview.drawing')}</legend>
             <div className="grid2">
-              <label className="field range"><span>Dimensione icona <b>{f.size}%</b></span>
+              <label className="field range"><span>{t('labview.iconSize')} <b>{f.size}%</b></span>
                 <input type="range" min="50" max="250" step="5" value={f.size} onChange={set('size')} /></label>
-              <label className="check"><input type="checkbox" checked={f.pinned} onChange={set('pinned')} /> Blocca la posizione sul foglio</label>
+              <label className="check"><input type="checkbox" checked={f.pinned} onChange={set('pinned')} /> {t('labview.pinOnSheet')}</label>
             </div>
           </fieldset>
         </div>
 
         <div className="sheet-foot">
-          <span className="muted small">{lab.links.filter((l) => l.endpoints.some((e) => splitEp(e)[0] === node.name)).length} collegamenti · {ns?.console_port ? `telnet :${ns.console_port}` : 'consolle non attiva'}</span>
+          <span className="muted small">{lab.links.filter((l) => l.endpoints.some((e) => splitEp(e)[0] === node.name)).length} {t('labview.linksLabel')} · {ns?.console_port ? `telnet :${ns.console_port}` : t('labview.consoleInactive')}</span>
           <div className="spacer" />
-          <button type="button" className="ghost" onClick={onClose}>Annulla</button>
-          <button className="primary" disabled={locked}><Ui name="save" size={15} /> Applica</button>
+          <button type="button" className="ghost" onClick={onClose}>{t('common.cancel')}</button>
+          <button className="primary" disabled={locked}><Ui name="save" size={15} /> {t('labview.apply')}</button>
         </div>
       </form>
     </div>
@@ -2621,6 +2639,7 @@ function NodeEditDialog({ node, tpl, ns, lab, locked, running, configSet, onClos
 }
 
 function NodePanel({ node, tpl, ns, lab, locked, onChange, onRename, onAction, onConsole, onDelete, configSet, onEnableConfig, onEditConfig, onEdit, canEdit, running, onApply, needsImage, pulling, onPullImage }) {
+  useLang()
   const [nameDraft, setNameDraft] = useState(node.name)
   const status = ns?.status || 'stopped'
   const host = location.hostname
@@ -2636,13 +2655,13 @@ function NodePanel({ node, tpl, ns, lab, locked, onChange, onRename, onAction, o
           <small>{tpl?.description || node.template}</small>
         </div>
       </div>
-      <div className={`status-line ${status}`}><span className={`dot ${status}`} />{status === 'running' ? 'In esecuzione' : status === 'error' ? 'Errore' : 'Fermo'}</div>
+      <div className={`status-line ${status}`}><span className={`dot ${status}`} />{status === 'running' ? t('labview.statusRunning') : status === 'error' ? t('labview.statusError') : t('labview.statusStopped')}</div>
       {ns?.error && <div className="warning err small">{ns.error}</div>}
       {needsImage && (
         <div className="warning small img-missing">
-          <span>Immagine Docker non presente sul server{tpl?.image ? <>: <code>{tpl.image}</code></> : ''}.</span>
+          <span>{t('labview.dockerImageMissing')}{tpl?.image ? <>: <code>{tpl.image}</code></> : ''}.</span>
           <button className="primary" disabled={pulling} onClick={onPullImage}>
-            {pulling ? <><span className="spin" /> Scarico…</> : <><Ui name="download" size={14} /> Scarica immagine</>}
+            {pulling ? <><span className="spin" /> {t('labview.downloading')}</> : <><Ui name="download" size={14} /> {t('labview.downloadImage')}</>}
           </button>
         </div>
       )}
@@ -2650,10 +2669,10 @@ function NodePanel({ node, tpl, ns, lab, locked, onChange, onRename, onAction, o
       {isVm(tpl) && (
         <div className="actions">
           {status === 'running'
-            ? <><button onClick={() => onAction('stop')}><Ui name="stop" size={14} /> Ferma</button>
-                {(ns?.console_port || ns?.container) && <button className="primary" onClick={onConsole}><Ui name="console" size={14} /> Consolle</button>}</>
-            : <button className="primary" onClick={() => onAction('start')}><Ui name="play" size={14} /> Avvia</button>}
-          {hasDisks(tpl) && status !== 'running' && <button className="ghost" onClick={() => onAction('wipe')}><Ui name="wipe" size={14} /> Azzera</button>}
+            ? <><button onClick={() => onAction('stop')}><Ui name="stop" size={14} /> {t('labview.stop')}</button>
+                {(ns?.console_port || ns?.container) && <button className="primary" onClick={onConsole}><Ui name="console" size={14} /> {t('labview.console')}</button>}</>
+            : <button className="primary" onClick={() => onAction('start')}><Ui name="play" size={14} /> {t('labview.start')}</button>}
+          {hasDisks(tpl) && status !== 'running' && <button className="ghost" onClick={() => onAction('wipe')}><Ui name="wipe" size={14} /> {t('labview.wipe')}</button>}
         </div>
       )}
 
@@ -2664,16 +2683,16 @@ function NodePanel({ node, tpl, ns, lab, locked, onChange, onRename, onAction, o
         </div>
       )}
 
-      <button className="wide edit-all" onClick={onEdit}><Ui name="edit" size={15} /> Modifica tutte le proprietà…</button>
-      <Section title="Proprietà">
-      <label className="field"><span>Nome</span>
+      <button className="wide edit-all" onClick={onEdit}><Ui name="edit" size={15} /> {t('labview.editAllProps')}</button>
+      <Section title={t('labview.properties')}>
+      <label className="field"><span>{t('labview.name')}</span>
         <input value={nameDraft} disabled={locked} onChange={(e) => setNameDraft(e.target.value)}
           onBlur={() => nameDraft !== node.name && onRename(nameDraft)}
           onKeyDown={(e) => e.key === 'Enter' && e.currentTarget.blur()} />
       </label>
       <label className="field"><span>Template</span><input value={node.template} disabled /></label>
       {isVm(tpl) && <>
-        <label className="field"><span>Immagine</span>
+        <label className="field"><span>{t('labview.image')}</span>
           <input placeholder={tpl.image} value={node.image || ''} onChange={(e) => onChange({ image: e.target.value || undefined })} />
         </label>
         <div className="grid3">
@@ -2683,51 +2702,51 @@ function NodePanel({ node, tpl, ns, lab, locked, onChange, onRename, onAction, o
         </div>
       </>}
       {tpl?.kind === 'external' && (
-        <label className="field"><span>Bridge host</span>
+        <label className="field"><span>{t('labview.hostBridgeShort')}</span>
           <input placeholder={tpl.host_bridge} value={node.host_bridge || ''} disabled={locked} onChange={(e) => onChange({ host_bridge: e.target.value || undefined })} />
         </label>
       )}
-      {status === 'running' && isVm(tpl) && <p className="hint">CPU/RAM/immagine valgono al prossimo avvio del nodo.</p>}
+      {status === 'running' && isVm(tpl) && <p className="hint">{t('labview.hint.cpuRamNext')}</p>}
       </Section>
 
       {isVm(tpl) && <>
-        <Section title="Startup config">
+        <Section title={t('labview.startupConfig')}>
         <div className="cfg-inline">
           <Toggle on={!!node.startup_config} disabled={!supportsConfig(tpl)} onChange={onEnableConfig}
-            title={supportsConfig(tpl) ? '' : 'Questo template non supporta la startup-config'} />
-          <span className="grow muted small">{supportsConfig(tpl) ? <>set <b>{configSet}</b></> : 'non supportata'}</span>
-          <button className="mini" onClick={onEditConfig}><Ui name="config" size={14} /> Modifica</button>
+            title={supportsConfig(tpl) ? '' : t('labview.noStartupSupport')} />
+          <span className="grow muted small">{supportsConfig(tpl) ? <>set <b>{configSet}</b></> : t('labview.notSupportedLc')}</span>
+          <button className="mini" onClick={onEditConfig}><Ui name="config" size={14} /> {t('labview.edit')}</button>
         </div>
         </Section>
       </>}
 
       {tpl?.kind === 'bridge' && <SwitchPorts node={node} lab={lab} canEdit={canEdit} running={running} onChange={onChange} onApply={onApply} />}
       {tpl?.kind === 'vxlan' && (
-        <Section title="Collegamento remoto (VXLAN)">
+        <Section title={t('labview.remoteLink')}>
           <div className="grid2">
-            <label className="field"><span>IP dell'altro server</span><input className="mono" placeholder="192.168.12.50" value={node.remote || ''} disabled={locked}
+            <label className="field"><span>{t('labview.otherServerIp')}</span><input className="mono" placeholder="192.168.12.50" value={node.remote || ''} disabled={locked}
               onChange={(e) => onChange({ remote: e.target.value || undefined })} /></label>
             <label className="field"><span>VNI</span><input type="number" min="1" max="16777215" placeholder="5001" value={node.vni ?? ''} disabled={locked}
               onChange={(e) => onChange({ vni: e.target.value === '' ? undefined : Number(e.target.value) })} /></label>
           </div>
-          <label className="field"><span>Porta UDP</span><input type="number" placeholder="4789" value={node.dstport ?? ''} disabled={locked}
+          <label className="field"><span>{t('labview.udpPort')}</span><input type="number" placeholder="4789" value={node.dstport ?? ''} disabled={locked}
             onChange={(e) => onChange({ dstport: e.target.value === '' ? undefined : Number(e.target.value) })} /></label>
-          <p className="hint">Sull'altro server NetSO crea lo stesso nodo VXLAN con l'IP di <b>questo</b> server e lo <b>stesso VNI</b>: i dispositivi collegati ai due nodi sono sullo stesso cavo. MTU 1450 sul tunnel (abbassa l'MTU nei dispositivi o alza quella della rete tra i server).</p>
+          <p className="hint">{t('labview.hint.vxlan2')}</p>
         </Section>
       )}
       {tpl?.kind === 'nat' && (
-        <Section title="Rete NAT (internet)">
-          <label className="field"><span>Subnet del lab</span>
-            <input placeholder="automatica (172.31.x.0/24)" value={node.subnet || ''} disabled={locked} onChange={(e) => onChange({ subnet: e.target.value || undefined })} /></label>
+        <Section title={t('labview.natNetwork')}>
+          <label className="field"><span>{t('labview.labSubnet')}</span>
+            <input placeholder={t('labview.subnetAuto')} value={node.subnet || ''} disabled={locked} onChange={(e) => onChange({ subnet: e.target.value || undefined })} /></label>
           {ns?.subnet ? (
-            <div className="kv"><span>Rete</span><b className="mono">{ns.subnet}</b><span>Gateway</span><b className="mono">{ns.subnet.replace(/\.0\/\d+$/, '.1')}</b>
+            <div className="kv"><span>{t('labview.network')}</span><b className="mono">{ns.subnet}</b><span>Gateway</span><b className="mono">{ns.subnet.replace(/\.0\/\d+$/, '.1')}</b>
               <span>DHCP</span><b className="mono">.10 – .254</b><span>DNS</span><b className="mono">{ns.subnet.replace(/\.0\/\d+$/, '.1')}</b></div>
-          ) : <p className="hint">Al deploy il server crea la rete, il DHCP e il NAT verso la sua connessione internet.</p>}
-          <p className="hint">Nei dispositivi: DHCP (es. <code>ip dhcp</code> sul VPC, <code>ip address dhcp</code> su IOS) oppure un IP della subnet con gateway <code>.1</code>.</p>
+          ) : <p className="hint">{t('labview.hint.natDeploy')}</p>}
+          <p className="hint">{t('labview.hint.natDevB1')}<code>ip dhcp</code>{t('labview.hint.natDevB2')}<code>ip address dhcp</code>{t('labview.hint.natDevB3')}<code>.1</code>.</p>
         </Section>
       )}
-      <Section title={`Collegamenti (${links.length})`}>
-      {links.length === 0 ? <p className="hint">Nessuno — trascina la spina arancione del nodo su un altro nodo.</p> : (
+      <Section title={t('labview.linksCount', { n: links.length })}>
+      {links.length === 0 ? <p className="hint">{t('labview.noLinksNode')}</p> : (
         <ul className="links">
           {links.map((eps, i) => {
             const me = eps.find(([n]) => n === node.name), other = eps.find((e) => e !== me)
@@ -2736,7 +2755,7 @@ function NodePanel({ node, tpl, ns, lab, locked, onChange, onRename, onAction, o
         </ul>
       )}
       </Section>
-      <button className="danger wide" onClick={onDelete} disabled={locked || status === 'running'}><Ui name="trash" size={15} /> Elimina nodo</button>
+      <button className="danger wide" onClick={onDelete} disabled={locked || status === 'running'}><Ui name="trash" size={15} /> {t('labview.deleteNode')}</button>
     </div>
   )
 }
@@ -2765,6 +2784,7 @@ function captureEndpoints(lab, tplByName) {
 }
 
 function CaptureDialog({ name, lab, state, tplByName, caps, initial, onClose, onChanged, onError, onWireshark, onOpenFile, onShowWs, onStopWs }) {
+  useLang()
   const eps = useMemo(() => captureEndpoints(lab, tplByName), [lab, tplByName])
   const live = (ep) => state?.nodes?.[splitEp(ep)[0]]?.status === 'running'
   const runningCap = (ep) => caps.find((c) => c.running && !c.wireshark && `${c.node}:${c.iface}` === ep)
@@ -2803,7 +2823,7 @@ function CaptureDialog({ name, lab, state, tplByName, caps, initial, onClose, on
 
   // live packets of the selected capture
   useEffect(() => {
-    pk.current = []; setSelPkt(null); setInfo(null); setGone(false); setAuto(true); setTick((t) => t + 1)
+    pk.current = []; setSelPkt(null); setInfo(null); setGone(false); setAuto(true); setTick((x) => x + 1)
     if (!cur) return
     const ws = new WebSocket(wsUrl(`/labs/${name}/captures/${encodeURIComponent(cur)}/live`))
     ws.onmessage = (ev) => {
@@ -2813,7 +2833,7 @@ function CaptureDialog({ name, lab, state, tplByName, caps, initial, onClose, on
         pk.current.push(...m.packets)
         if (pk.current.length > MAX_PKTS) pk.current.splice(0, pk.current.length - MAX_PKTS)
       }
-      setInfo(m.info); setTick((t) => t + 1)
+      setInfo(m.info); setTick((x) => x + 1)
     }
     return () => ws.close()
   }, [cur, name])
@@ -2826,7 +2846,7 @@ function CaptureDialog({ name, lab, state, tplByName, caps, initial, onClose, on
 
   const terms = view.toLowerCase().split(/\s+/).filter(Boolean)
   const rows = terms.length
-    ? pk.current.filter((p) => { const h = `${p.proto} ${p.src} ${p.dst} ${p.info}`.toLowerCase(); return terms.every((t) => (t[0] === '!' ? !h.includes(t.slice(1)) : h.includes(t))) })
+    ? pk.current.filter((p) => { const h = `${p.proto} ${p.src} ${p.dst} ${p.info}`.toLowerCase(); return terms.every((term) => (term[0] === '!' ? !h.includes(term.slice(1)) : h.includes(term))) })
     : pk.current
   const t0 = pk.current[0]?.t || 0
 
@@ -2851,7 +2871,7 @@ function CaptureDialog({ name, lab, state, tplByName, caps, initial, onClose, on
     try { await api(`/labs/${name}/captures/${encodeURIComponent(cur)}${path}`, { method }); await onChanged() } catch (e) { onError(e) }
   }
   const remove = async () => {
-    if (!confirm(`Eliminare la cattura ${cur}?`)) return
+    if (!confirm(t('labview.confirm.deleteCapture', { id: cur }))) return
     await act('', 'DELETE'); setCur(caps.find((c) => c.id !== cur)?.id || null)
   }
   const sharkCmd = curEp ? `curl -sN '${apiUrl(`/labs/${name}/capture-stream`, { node: ci.node, iface: ci.iface, ...(ci.filter ? { filter: ci.filter } : {}) })}' | wireshark -k -i -` : ''
@@ -2862,46 +2882,46 @@ function CaptureDialog({ name, lab, state, tplByName, caps, initial, onClose, on
   return (
     <div className="modal-bg" onClick={onClose}>
       <div className="modal xl cap" onClick={(e) => e.stopPropagation()}>
-        <ModalHead icon="capture" title="Cattura pacchetti" sub="tcpdump sulle interfacce dei collegamenti, in diretta e in file .pcap" onClose={onClose} />
+        <ModalHead icon="capture" title={t('labview.capturePackets')} sub={t('labview.captureSub')} onClose={onClose} />
         <div className="cap-body">
           <div className="cap-side">
             <form className="cap-new" onSubmit={(e) => { e.preventDefault(); start() }}>
-              <div className="ctx-sec">Nuova cattura</div>
-              <label className="field"><span>Interfaccia</span>
+              <div className="ctx-sec">{t('labview.newCapture')}</div>
+              <label className="field"><span>{t('labview.interface')}</span>
                 <select value={ep} onChange={(e) => setEp(e.target.value)}>
                   {eps.map((e) => {
                     const [n, i] = splitEp(e.ep), [pn, pi] = splitEp(e.peer)
-                    return <option key={e.ep} value={e.ep} disabled={!live(e.ep)}>{n} {i} → {pn} {pi}{live(e.ep) ? '' : ' (fermo)'}</option>
+                    return <option key={e.ep} value={e.ep} disabled={!live(e.ep)}>{n} {i} → {pn} {pi}{live(e.ep) ? '' : t('labview.stoppedParen')}</option>
                   })}
                 </select>
               </label>
-              <label className="field"><span>Filtro (sintassi tcpdump / BPF)</span>
-                <input list="bpf-presets" className="mono" placeholder="tutto il traffico" value={bpf} onChange={(e) => setBpf(e.target.value)} />
+              <label className="field"><span>{t('labview.filterLabel')}</span>
+                <input list="bpf-presets" className="mono" placeholder={t('labview.allTraffic')} value={bpf} onChange={(e) => setBpf(e.target.value)} />
                 <datalist id="bpf-presets">{BPF_PRESETS.map((p) => <option key={p} value={p} />)}</datalist>
               </label>
               <div className="cap-go">
-                <button className="primary" type="button" disabled={!ep || !live(ep)} onClick={() => onWireshark(ep, bpf)} title="Apri la vera interfaccia di Wireshark nel browser">
+                <button className="primary" type="button" disabled={!ep || !live(ep)} onClick={() => onWireshark(ep, bpf)} title={t('labview.openRealWireshark')}>
                   <Ui name="capture" size={15} /> Wireshark
                 </button>
-                <button type="submit" disabled={!ep || !live(ep)} title="Tabella leggera dei pacchetti in questa finestra">
-                  <span className="rec-dot" /> {runningCap(ep) ? 'Mostra tabella' : 'Tabella'}
+                <button type="submit" disabled={!ep || !live(ep)} title={t('labview.lightTableTitle')}>
+                  <span className="rec-dot" /> {runningCap(ep) ? t('labview.showTable') : t('labview.table')}
                 </button>
               </div>
-              {!eps.length && <p className="hint">Nessun collegamento su VM o container da catturare.</p>}
-              {eps.length > 0 && !eps.some((e) => live(e.ep)) && <p className="hint">Avvia i nodi per poter catturare.</p>}
+              {!eps.length && <p className="hint">{t('labview.noCaptureLinks')}</p>}
+              {eps.length > 0 && !eps.some((e) => live(e.ep)) && <p className="hint">{t('labview.startNodesToCapture')}</p>}
             </form>
-            <div className="ctx-sec">Catture</div>
+            <div className="ctx-sec">{t('labview.captures')}</div>
             <div className="cap-list">
               {caps.map((c) => (
                 <div key={c.id} className={`cap-row ${c.id === cur ? 'on' : ''}`} onClick={() => setCur(c.id)} title={c.id}>
                   <span className={`rec ${c.running ? 'on' : ''}`} />
                   <div className="grow">
                     <b>{c.node} <code>{c.iface}</code></b>
-                    <small>{fmtClock(c.started)} · {c.packets != null ? `${c.packets} pacchetti · ` : ''}{fmtSize(c.size)}{c.filter ? ` · ${c.filter}` : ''}</small>
+                    <small>{fmtClock(c.started)} · {c.packets != null ? `${c.packets} ${t('labview.packetsWord')} · ` : ''}{fmtSize(c.size)}{c.filter ? ` · ${c.filter}` : ''}</small>
                   </div>
                 </div>
               ))}
-              {!caps.length && <p className="hint">Nessuna cattura. Puoi avviarne una anche col tasto destro su un collegamento.</p>}
+              {!caps.length && <p className="hint">{t('labview.noCaptures')}</p>}
             </div>
           </div>
 
@@ -2911,30 +2931,30 @@ function CaptureDialog({ name, lab, state, tplByName, caps, initial, onClose, on
                 <span className={`rec ${ci.running ? 'on' : ''}`} />
                 <div className="grow cap-title">
                   <div><b>{ci.node} <code>{ci.iface}</code></b>{peer && <span className="muted"> ⟷ {splitEp(peer)[0]} <code>{splitEp(peer)[1]}</code></span>}</div>
-                  <small className="muted">{ci.running ? 'in corso' : 'fermata'} · {ci.packets ?? '?'} pacchetti · {fmtSize(ci.size)}{ci.filter ? <> · filtro <code>{ci.filter}</code></> : ''}</small>
+                  <small className="muted">{ci.running ? t('labview.inProgress') : t('labview.stoppedF')} · {ci.packets ?? '?'} {t('labview.packetsWord')} · {fmtSize(ci.size)}{ci.filter ? <> · {t('labview.filterWord')} <code>{ci.filter}</code></> : ''}</small>
                 </div>
-                {capObj?.wireshark && ci.running && <button className="ghost" onClick={() => onShowWs(cur)}><Ui name="capture" size={15} /> Mostra Wireshark</button>}
-                {ci.running && <button className="ghost danger-t" onClick={() => (capObj?.wireshark ? onStopWs(cur) : act('/stop'))}><Ui name="stop" size={14} /> Ferma</button>}
-                {!ci.running && <button className="ghost" onClick={() => onOpenFile(cur)} title="Apri il file nel Wireshark integrato"><Ui name="capture" size={15} /> Apri in Wireshark</button>}
+                {capObj?.wireshark && ci.running && <button className="ghost" onClick={() => onShowWs(cur)}><Ui name="capture" size={15} /> {t('labview.showWireshark')}</button>}
+                {ci.running && <button className="ghost danger-t" onClick={() => (capObj?.wireshark ? onStopWs(cur) : act('/stop'))}><Ui name="stop" size={14} /> {t('labview.stop')}</button>}
+                {!ci.running && <button className="ghost" onClick={() => onOpenFile(cur)} title={t('labview.openFileWireshark')}><Ui name="capture" size={15} /> {t('labview.openInWireshark')}</button>}
                 <a className="btn ghost" href={apiUrl(`/labs/${name}/captures/${encodeURIComponent(cur)}/pcap`)} download><Ui name="download" size={15} /> .{ci.format || 'pcap'}</a>
-                {!capObj?.wireshark && <button className={`ghost ${shark ? 'on' : ''}`} onClick={() => setShark((v) => !v)} disabled={!live(curEp)} title="Apri la stessa interfaccia in Wireshark sul tuo PC"><Ui name="capture" size={15} /> Wireshark sul PC</button>}
-                <button className="icon-btn" title="Elimina cattura" onClick={remove}><Ui name="trash" size={15} /></button>
+                {!capObj?.wireshark && <button className={`ghost ${shark ? 'on' : ''}`} onClick={() => setShark((v) => !v)} disabled={!live(curEp)} title={t('labview.openSameIfaceWireshark')}><Ui name="capture" size={15} /> {t('labview.wiresharkOnPc')}</button>}
+                <button className="icon-btn" title={t('labview.deleteCapture')} onClick={remove}><Ui name="trash" size={15} /></button>
               </div>
               {ci.error && <div className="warning err small">✖ tcpdump: {ci.error}</div>}
               {shark && (
                 <div className="cap-shark">
                   <code className="mono">{sharkCmd}</code>
-                  <button className="ghost" onClick={copy}><Ui name="copy" size={14} /> {copied ? 'Copiato' : 'Copia'}</button>
-                  <p className="hint">Incolla nel terminale del tuo PC: Wireshark riceve i pacchetti in diretta dal server. Su macOS usa <code>/Applications/Wireshark.app/Contents/MacOS/Wireshark</code> al posto di <code>wireshark</code>.</p>
+                  <button className="ghost" onClick={copy}><Ui name="copy" size={14} /> {copied ? t('labview.copied') : t('labview.copy')}</button>
+                  <p className="hint">{t('labview.shark.hint1')}<code>/Applications/Wireshark.app/Contents/MacOS/Wireshark</code>{t('labview.shark.hint2')}<code>wireshark</code>.</p>
                 </div>
               )}
               <div className="cap-tools">
-                <input className="mono grow" placeholder="Filtra la vista: es. icmp 10.0.0.1 !arp" value={view} onChange={(e) => setView(e.target.value)} />
-                <button className={`ghost ${auto ? 'on' : ''}`} title="Scorrimento automatico" onClick={() => setAuto((v) => !v)}><Ui name={auto ? 'pause' : 'play'} size={14} /> {auto ? 'Segui' : 'In pausa'}</button>
-                <span className="muted small">{rows.length}{terms.length ? ` / ${pk.current.length}` : ''} righe</span>
+                <input className="mono grow" placeholder={t('labview.filterViewPlaceholder')} value={view} onChange={(e) => setView(e.target.value)} />
+                <button className={`ghost ${auto ? 'on' : ''}`} title={t('labview.autoScroll')} onClick={() => setAuto((v) => !v)}><Ui name={auto ? 'pause' : 'play'} size={14} /> {auto ? t('labview.follow') : t('labview.paused')}</button>
+                <span className="muted small">{rows.length}{terms.length ? ` / ${pk.current.length}` : ''} {t('labview.rowsWord')}</span>
               </div>
               <div className="pk">
-                <div className="pk-row pk-head"><span>N.</span><span>Tempo</span><span>Sorgente</span><span>Destinazione</span><span>Proto</span><span>Lung.</span><span>Info</span></div>
+                <div className="pk-row pk-head"><span>{t('labview.pk.n')}</span><span>{t('labview.pk.time')}</span><span>{t('labview.pk.src')}</span><span>{t('labview.pk.dst')}</span><span>Proto</span><span>{t('labview.pk.len')}</span><span>Info</span></div>
                 <div className="pk-body" ref={body} onScroll={onScroll}>
                   <div style={{ height: rows.length * ROW_H, position: 'relative' }}>
                     {rows.slice(first, last).map((p, k) => (
@@ -2947,17 +2967,17 @@ function CaptureDialog({ name, lab, state, tplByName, caps, initial, onClose, on
                   </div>
                   {!rows.length && (
                     <p className="hint pk-empty">{gone
-                      ? capObj?.wireshark ? 'Questa cattura è registrata dal Wireshark integrato: guardala lì.' : 'I pacchetti di questa cattura non sono in memoria: premi «Apri in Wireshark» o scarica il file.'
-                      : ci.running ? 'In attesa di pacchetti…' : 'Nessun pacchetto.'}</p>
+                      ? capObj?.wireshark ? t('labview.pk.wiresharkRecorded') : t('labview.pk.notInMemory')
+                      : ci.running ? t('labview.pk.waiting') : t('labview.pk.none')}</p>
                   )}
                 </div>
               </div>
               {selPkt && (
                 <div className="pk-detail">
                   <div className="kv">
-                    <span>Pacchetto</span><b>#{selPkt.n} · {fmtClock(selPkt.t)}.{String(Math.round((selPkt.t % 1) * 1e6)).padStart(6, '0')}</b>
-                    <span>Da → a</span><b className="mono">{selPkt.src} → {selPkt.dst}</b>
-                    <span>Protocollo</span><b>{selPkt.proto} · {selPkt.len} byte</b>
+                    <span>{t('labview.pk.packet')}</span><b>#{selPkt.n} · {fmtClock(selPkt.t)}.{String(Math.round((selPkt.t % 1) * 1e6)).padStart(6, '0')}</b>
+                    <span>{t('labview.pk.fromTo')}</span><b className="mono">{selPkt.src} → {selPkt.dst}</b>
+                    <span>{t('labview.pk.protocol')}</span><b>{selPkt.proto} · {selPkt.len} byte</b>
                   </div>
                   <code className="mono">{selPkt.info}</code>
                 </div>
@@ -2965,7 +2985,7 @@ function CaptureDialog({ name, lab, state, tplByName, caps, initial, onClose, on
             </> : (
               <div className="cap-empty">
                 <Ui name="capture" size={40} />
-                <p>Scegli un'interfaccia a sinistra e premi <b>Wireshark</b> (interfaccia completa)<br />o <b>Tabella</b> (vista leggera qui), oppure tasto destro su un collegamento.</p>
+                <p>{t('labview.cap.emptyA')} <b>Wireshark</b> {t('labview.cap.emptyB')}<br />{t('labview.cap.emptyC')} <b>{t('labview.table')}</b> {t('labview.cap.emptyD')}</p>
               </div>
             )}
           </div>

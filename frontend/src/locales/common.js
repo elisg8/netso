@@ -11,6 +11,7 @@ export const en = {
   'common.refreshAll': 'Refresh everything',
   'common.language': 'Language',
   'common.theme': 'Color theme',
+  'common.uploadAborted': 'Upload interrupted',
   // theme names (by theme id, see theme.js)
   'theme.dark': 'Dark',
   'theme.light': 'Light',

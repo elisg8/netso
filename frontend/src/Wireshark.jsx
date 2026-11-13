@@ -3,9 +3,11 @@ import { useEffect, useRef, useState } from 'react'
 import RFB from '@novnc/novnc'
 import { api, wsUrl } from './api.js'
 import { Ui } from './icons.jsx'
+import { t, useLang } from './i18n.js'
 
 // The remote Wireshark screen. The X server follows the size of this box.
 export function WiresharkScreen({ lab, session, hidden }) {
+  useLang()
   const box = useRef(null)
   const rfb = useRef(null)
   const [status, setStatus] = useState('connecting')
@@ -32,17 +34,17 @@ export function WiresharkScreen({ lab, session, hidden }) {
       <div className="ws-vnc" ref={box} />
       {status !== 'on' && (
         <div className="ws-overlay">
-          {status === 'connecting' && <><span className="spin" /><p>Avvio di Wireshark…</p></>}
+          {status === 'connecting' && <><span className="spin" /><p>{t('wireshark.starting')}</p></>}
           {status === 'ended' && <>
             <Ui name="capture" size={36} />
-            <p>Wireshark è stato chiuso o non è raggiungibile.</p>
-            <button onClick={() => setAttempt((a) => a + 1)}><Ui name="refresh" size={14} /> Riconnetti</button>
+            <p>{t('wireshark.closedUnreachable')}</p>
+            <button onClick={() => setAttempt((a) => a + 1)}><Ui name="refresh" size={14} /> {t('wireshark.reconnect')}</button>
           </>}
           {status === 'dry' && <>
             <Ui name="capture" size={40} />
-            <p><b>Modalità prova (dry-run)</b>: qui compare la vera interfaccia di Wireshark,<br />
-              in diretta su <code>{session.node} {session.iface}</code>{session.filter ? <> con filtro <code>{session.filter}</code></> : ''}.</p>
-            <p className="muted small">Sul server NetSO avvia il container <code>netso/wireshark</code> (creato da install.sh).</p>
+            <p><b>{t('wireshark.dryTitle')}</b>: {t('wireshark.dryIntro')}<br />
+              {t('wireshark.dryLiveOn')} <code>{session.node} {session.iface}</code>{session.filter ? <> {t('wireshark.dryWithFilter')} <code>{session.filter}</code></> : ''}.</p>
+            <p className="muted small">{t('wireshark.dryHintPre')} <code>netso/wireshark</code> {t('wireshark.dryHintPost')}</p>
           </>}
         </div>
       )}
@@ -56,6 +58,7 @@ function title(s) {
 
 // Floating window over the editor; can be minimized to a pill so you keep working on the topology.
 export function WiresharkWindows({ lab, wins, onMinimize, onRestore, onClose, onNewTab }) {
+  useLang()
   const open = wins.find((w) => !w.min)
   return (
     <>
@@ -67,9 +70,9 @@ export function WiresharkWindows({ lab, wins, onMinimize, onRestore, onClose, on
             <span className="muted">{w.session.live === false ? 'file' : 'live'} · <code>{title(w.session)}</code>{w.peer && <> ⟷ {w.peer}</>}</span>
             {w.session.filter && <code className="ws-filter">{w.session.filter}</code>}
             <div className="spacer" />
-            <button className="ghost" title="Apri in una nuova scheda del browser" onClick={() => onNewTab(w)}><Ui name="exit" size={15} /> Nuova scheda</button>
-            <button className="icon-btn" title="Riduci (Wireshark continua a catturare)" onClick={() => onMinimize(w)}><Ui name="minus" size={16} /></button>
-            <button className="icon-btn danger-t" title="Chiudi Wireshark (la cattura resta salvata)" onClick={() => onClose(w)}><Ui name="close" size={16} /></button>
+            <button className="ghost" title={t('wireshark.openNewTab')} onClick={() => onNewTab(w)}><Ui name="exit" size={15} /> {t('wireshark.newTab')}</button>
+            <button className="icon-btn" title={t('wireshark.minimize')} onClick={() => onMinimize(w)}><Ui name="minus" size={16} /></button>
+            <button className="icon-btn danger-t" title={t('wireshark.closeKeep')} onClick={() => onClose(w)}><Ui name="close" size={16} /></button>
           </div>
           <WiresharkScreen lab={lab} session={w.session} hidden={w.min} />
         </div>
@@ -77,7 +80,7 @@ export function WiresharkWindows({ lab, wins, onMinimize, onRestore, onClose, on
       {wins.some((w) => w.min) && (
         <div className="ws-pills">
           {wins.filter((w) => w.min).map((w) => (
-            <button key={w.session.id} className="ws-pill" onClick={() => onRestore(w)} title="Mostra Wireshark">
+            <button key={w.session.id} className="ws-pill" onClick={() => onRestore(w)} title={t('wireshark.show')}>
               {w.session.live !== false && <span className="rec on" />}<Ui name="capture" size={14} /> {title(w.session)}
             </button>
           ))}
@@ -90,6 +93,7 @@ export function WiresharkWindows({ lab, wins, onMinimize, onRestore, onClose, on
 
 // Stand-alone page: #/wireshark/<lab>/<session>
 export function WiresharkPage({ lab, sid }) {
+  useLang()
   const [session, setSession] = useState(null)
   const [missing, setMissing] = useState(false)
   useEffect(() => {
@@ -99,7 +103,7 @@ export function WiresharkPage({ lab, sid }) {
   }, [lab, sid])
   useEffect(() => { document.title = session ? `Wireshark · ${title(session)} · ${lab}` : 'Wireshark' }, [session, lab])
   const stop = async () => {
-    if (!confirm('Chiudere Wireshark? La cattura resta salvata nel lab.')) return
+    if (!confirm(t('wireshark.confirmClose'))) return
     try { await api(`/labs/${encodeURIComponent(lab)}/wireshark/${encodeURIComponent(sid)}`, { method: 'DELETE' }) } catch { /* ignore */ }
     window.close()
     setMissing(true)
@@ -112,10 +116,10 @@ export function WiresharkPage({ lab, sid }) {
         <span className="muted">{lab}{session && <> · <code>{title(session)}</code></>}</span>
         {session?.filter && <code className="ws-filter">{session.filter}</code>}
         <div className="spacer" />
-        {session && <button className="ghost danger-t" onClick={stop}><Ui name="close" size={15} /> Chiudi Wireshark</button>}
+        {session && <button className="ghost danger-t" onClick={stop}><Ui name="close" size={15} /> {t('wireshark.close')}</button>}
       </div>
       {session ? <WiresharkScreen lab={lab} session={session} />
-        : <div className="ws-overlay static">{missing ? <p>Sessione Wireshark terminata. Riaprila dal lab.</p> : <span className="spin" />}</div>}
+        : <div className="ws-overlay static">{missing ? <p>{t('wireshark.sessionEnded')}</p> : <span className="spin" />}</div>}
     </div>
   )
 }

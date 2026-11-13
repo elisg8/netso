@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { api, apiUrl } from './api.js'
 import Icon, { Ui } from './icons.jsx'
 import { ModalHead } from './LabView.jsx'
+import { getLang, t, useLang } from './i18n.js'
 
 export const EXPORT_FORMATS = [
   { id: 'netso', label: 'NetSO (YAML)', icon: 'download' },
@@ -28,6 +29,7 @@ function toBase64(buf) {
 }
 
 export function ImportDialog({ folder, templates, onClose, onCreated, onError }) {
+  useLang()
   const [file, setFile] = useState(null) // {filename, data}
   const [preview, setPreview] = useState(null)
   const [name, setName] = useState('')
@@ -53,7 +55,7 @@ export function ImportDialog({ folder, templates, onClose, onCreated, onError })
     run(f, {}, '')
   }
   const loadText = () => {
-    const f = { filename: 'incollato.yml', data: toBase64(new TextEncoder().encode(text)) }
+    const f = { filename: 'pasted.yml', data: toBase64(new TextEncoder().encode(text)) }
     setFile(f); setOverrides({}); setPreview(null); setName('')
     run(f, {}, '')
   }
@@ -71,46 +73,46 @@ export function ImportDialog({ folder, templates, onClose, onCreated, onError })
       onCreated(r.name, r.warnings)
     } catch (e) { onError(e) } finally { setBusy(false) }
   }
-  const tplByName = Object.fromEntries(templates.map((t) => [t.name, t]))
+  const tplByName = Object.fromEntries(templates.map((tpl) => [tpl.name, tpl]))
 
   return (
     <div className="modal-bg" onClick={onClose}>
       <div className="modal xl import-dlg" onClick={(e) => e.stopPropagation()}>
-        <ModalHead icon="upload" title="Importa un lab" sub={`da containerlab, CML, GNS3, EVE-NG/PNETLab o NetSO · in ${folder || 'root'}`} onClose={onClose} />
+        <ModalHead icon="upload" title={t('interop.importTitle')} sub={t('interop.importSub', { folder: folder || 'root' })} onClose={onClose} />
 
         {!preview ? (
           <>
             <div className={`drop ${drag ? 'on' : ''} ${busy ? 'busy' : ''}`} onClick={() => input.current?.click()}
               onDragOver={(e) => { e.preventDefault(); setDrag(true) }} onDragLeave={() => setDrag(false)}
               onDrop={(e) => { e.preventDefault(); setDrag(false); load(e.dataTransfer.files[0]) }}>
-              {busy ? <><span className="spin" /><p>Analisi del file…</p></> : <>
+              {busy ? <><span className="spin" /><p>{t('interop.analyzing')}</p></> : <>
                 <Ui name="upload" size={34} />
-                <p><b>Trascina qui il file del lab</b> oppure fai clic per sceglierlo</p>
+                <p><b>{t('interop.dropTitle')}</b> {t('interop.dropOr')}</p>
                 <div className="src-chips">{SOURCES.map(([n, ext]) => <span key={n}><b>{n}</b> {ext}</span>)}</div>
               </>}
               <input ref={input} type="file" hidden accept=".yml,.yaml,.gns3,.gns3project,.zip,.unl,.json,.xml" onChange={(e) => load(e.target.files[0])} />
             </div>
-            <button className="ghost paste-tgl" onClick={() => setPaste((v) => !v)}><Ui name="code" size={14} /> {paste ? 'Nascondi' : 'Oppure incolla il testo del file'}</button>
+            <button className="ghost paste-tgl" onClick={() => setPaste((v) => !v)}><Ui name="code" size={14} /> {paste ? t('interop.hide') : t('interop.orPaste')}</button>
             {paste && <>
-              <textarea className="code" style={{ minHeight: 200 }} placeholder="Incolla qui un lab containerlab, CML o NetSO (YAML)…" value={text} onChange={(e) => setText(e.target.value)} spellCheck={false} />
-              <div className="row-end"><button className="primary" disabled={!text.trim() || busy} onClick={loadText}>Analizza</button></div>
+              <textarea className="code" style={{ minHeight: 200 }} placeholder={t('interop.pastePlaceholder')} value={text} onChange={(e) => setText(e.target.value)} spellCheck={false} />
+              <div className="row-end"><button className="primary" disabled={!text.trim() || busy} onClick={loadText}>{t('interop.analyze')}</button></div>
             </>}
           </>
         ) : (
           <>
             <div className="imp-head">
               <span className={`fmt-badge f-${preview.format}`}>{preview.format_label}</span>
-              <span className="muted small">{file.filename} · {preview.nodes.length} nodi · {preview.links} collegamenti{preview.configs.length ? ` · ${preview.configs.length} config` : ''}</span>
+              <span className="muted small">{file.filename} · {t('interop.summary', { nodes: preview.nodes.length, links: preview.links })}{preview.configs.length ? t('interop.summaryConfigs', { n: preview.configs.length }) : ''}</span>
               <div className="spacer" />
-              <button className="ghost mini" onClick={() => { setPreview(null); setFile(null) }}>Cambia file</button>
+              <button className="ghost mini" onClick={() => { setPreview(null); setFile(null) }}>{t('interop.changeFile')}</button>
             </div>
-            <label className="field"><span>Nome del lab in NetSO</span>
+            <label className="field"><span>{t('interop.labName')}</span>
               <input value={name} pattern="[A-Za-z][A-Za-z0-9_\-]{0,31}" onChange={(e) => setName(e.target.value)} className={preview.exists ? 'bad' : ''} />
-              {preview.exists && <small className="err-t">Esiste già un lab con questo nome: cambialo per importare.</small>}
+              {preview.exists && <small className="err-t">{t('interop.nameExists')}</small>}
             </label>
             <div className="tbl-wrap imp-tbl">
               <table className="tbl">
-                <thead><tr><th>Nodo</th><th>Nel file originale</th><th>Diventa in NetSO</th><th>Immagine</th></tr></thead>
+                <thead><tr><th>{t('interop.colNode')}</th><th>{t('interop.colSource')}</th><th>{t('interop.colBecomes')}</th><th>{t('interop.colImage')}</th></tr></thead>
                 <tbody>
                   {preview.nodes.map((n) => (
                     <tr key={n.name}>
@@ -118,10 +120,10 @@ export function ImportDialog({ folder, templates, onClose, onCreated, onError })
                       <td className="muted small mono">{n.source}</td>
                       <td>
                         <select className="cell" value={n.template} onChange={(e) => setTpl(n.name, e.target.value)} disabled={busy || preview.format === 'netso'}>
-                          {templates.map((t) => <option key={t.name} value={t.name}>{t.name}</option>)}
+                          {templates.map((tpl) => <option key={tpl.name} value={tpl.name}>{tpl.name}</option>)}
                         </select>
                       </td>
-                      <td className="mono small">{n.image || <span className="muted">del template</span>}</td>
+                      <td className="mono small">{n.image || <span className="muted">{t('interop.fromTemplate')}</span>}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -129,14 +131,14 @@ export function ImportDialog({ folder, templates, onClose, onCreated, onError })
             </div>
             {preview.warnings.length > 0 && (
               <details className="imp-warn" open={preview.warnings.length <= 4}>
-                <summary>{preview.warnings.length} avvisi</summary>
+                <summary>{t('interop.warnings', { n: preview.warnings.length })}</summary>
                 <ul>{preview.warnings.map((w, i) => <li key={i}>{w}</li>)}</ul>
               </details>
             )}
-            <p className="hint">Le immagini non vengono importate: le VM useranno le immagini presenti sul server (stesso nome della cartella, come in EVE-NG).</p>
+            <p className="hint">{t('interop.imagesHint')}</p>
             <div className="row-end">
-              <button className="ghost" onClick={onClose}>Annulla</button>
-              <button className="primary" disabled={busy || preview.exists || !name} onClick={doImport}>{busy ? <span className="spin" /> : <Ui name="upload" size={15} />} Importa</button>
+              <button className="ghost" onClick={onClose}>{t('common.cancel')}</button>
+              <button className="primary" disabled={busy || preview.exists || !name} onClick={doImport}>{busy ? <span className="spin" /> : <Ui name="upload" size={15} />} {t('interop.import')}</button>
             </div>
           </>
         )}
@@ -145,9 +147,10 @@ export function ImportDialog({ folder, templates, onClose, onCreated, onError })
   )
 }
 
-const fmtWhen = (t) => new Date(t * 1000).toLocaleString('it-IT', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+const fmtWhen = (ts) => new Date(ts * 1000).toLocaleString(getLang() === 'it' ? 'it-IT' : 'en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 
 export function SnapshotsDialog({ lab, dirty, onSave, onRestored, onClose, onError }) {
+  useLang()
   const [list, setList] = useState(null)
   const [name, setName] = useState('')
   const [desc, setDesc] = useState('')
@@ -164,30 +167,30 @@ export function SnapshotsDialog({ lab, dirty, onSave, onRestored, onClose, onErr
     })
   }
   const restore = (s) => {
-    if (!confirm(`Ripristinare "${s.name}"? Topologia, startup config e dischi delle VM tornano come al ${fmtWhen(s.created)}. Le modifiche successive andranno perse.`)) return
+    if (!confirm(t('interop.confirmRestore', { name: s.name, when: fmtWhen(s.created) }))) return
     act(s.name, async () => { await api(`/labs/${encodeURIComponent(lab)}/snapshots/${s.name}/restore`, { method: 'POST' }); onRestored() })
   }
-  const remove = (s) => confirm(`Eliminare l'istantanea "${s.name}"?`) && act(s.name, () => api(`/labs/${encodeURIComponent(lab)}/snapshots/${s.name}`, { method: 'DELETE' }))
+  const remove = (s) => confirm(t('interop.confirmDeleteSnap', { name: s.name })) && act(s.name, () => api(`/labs/${encodeURIComponent(lab)}/snapshots/${s.name}`, { method: 'DELETE' }))
   return (
     <div className="modal-bg" onClick={onClose}>
       <div className="modal wide" onClick={(e) => e.stopPropagation()}>
-        <ModalHead icon="copy" title="Istantanee del lab" sub="Topologia, startup config e dischi delle VM in un momento preciso" onClose={onClose} />
+        <ModalHead icon="copy" title={t('interop.snapTitle')} sub={t('interop.snapSub')} onClose={onClose} />
         <form className="snap-new" onSubmit={create}>
-          <input required placeholder="Nome (es. base, ospf-ok)" pattern="[A-Za-z][A-Za-z0-9_\-]{0,31}" value={name} onChange={(e) => setName(e.target.value)} />
-          <input placeholder="Descrizione (facoltativa)" value={desc} onChange={(e) => setDesc(e.target.value)} />
-          <button className="primary" disabled={!!busy}>{busy === 'create' ? <span className="spin" /> : <Ui name="plus" size={15} />} Crea istantanea</button>
+          <input required placeholder={t('interop.snapNamePh')} pattern="[A-Za-z][A-Za-z0-9_\-]{0,31}" value={name} onChange={(e) => setName(e.target.value)} />
+          <input placeholder={t('interop.snapDescPh')} value={desc} onChange={(e) => setDesc(e.target.value)} />
+          <button className="primary" disabled={!!busy}>{busy === 'create' ? <span className="spin" /> : <Ui name="plus" size={15} />} {t('interop.snapCreate')}</button>
         </form>
-        <p className="hint">Le VM devono essere spente. I container ripartono dalla loro immagine: il loro stato interno non viene salvato.</p>
+        <p className="hint">{t('interop.snapHint')}</p>
         <div className="snap-list">
-          {list === null ? <span className="spin" /> : list.length === 0 ? <p className="muted">Nessuna istantanea ancora.</p> : list.map((s, i) => (
+          {list === null ? <span className="spin" /> : list.length === 0 ? <p className="muted">{t('interop.snapNone')}</p> : list.map((s, i) => (
             <div key={s.name} className="snap-row" style={{ '--i': i }}>
               <span className="snap-dot" />
               <div className="grow">
-                <b>{s.name}</b> <span className="muted small">{fmtWhen(s.created)} · {s.nodes} nodi · {s.disks.length} dischi VM</span>
+                <b>{s.name}</b> <span className="muted small">{fmtWhen(s.created)} · {t('interop.snapMeta', { n: s.nodes, disks: s.disks.length })}</span>
                 {s.description && <div className="small">{s.description}</div>}
               </div>
-              <button className="mini" disabled={!!busy} onClick={() => restore(s)}>{busy === s.name ? <span className="spin" /> : <Ui name="refresh" size={13} />} Ripristina</button>
-              <button className="mini danger" disabled={!!busy} onClick={() => remove(s)} title="Elimina"><Ui name="trash" size={13} /></button>
+              <button className="mini" disabled={!!busy} onClick={() => restore(s)}>{busy === s.name ? <span className="spin" /> : <Ui name="refresh" size={13} />} {t('interop.restore')}</button>
+              <button className="mini danger" disabled={!!busy} onClick={() => remove(s)} title={t('common.delete')}><Ui name="trash" size={13} /></button>
             </div>
           ))}
         </div>

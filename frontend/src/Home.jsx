@@ -10,7 +10,8 @@ import CatalogDialog, { IconsDialog } from './Catalog.jsx'
 import { GenerateLabDialog } from './Automation.jsx'
 import { AgentsSettingsDialog } from './Agents.jsx'
 
-const fmtStatus = { running: 'avviato', stopped: 'fermo', error: 'errore', deploying: 'avvio…' }
+const STATUS_KEY = { running: 'home.statusRunning', stopped: 'home.statusStopped', error: 'home.statusError', deploying: 'home.statusDeploying' }
+const statusLabel = (s) => STATUS_KEY[s] ? t(STATUS_KEY[s]) : s
 const FOLDER_RE = '[A-Za-z0-9][A-Za-z0-9 _.\\-]{0,39}'
 const LAB_RE = '[A-Za-z][A-Za-z0-9 _\\-]{0,47}'
 const DRAG = 'application/x-netso-items'
@@ -20,7 +21,7 @@ const baseOf = (p) => p.slice(p.lastIndexOf('/') + 1)
 const inside = (p, f) => p === f || p.startsWith(`${f}/`)
 const key = (r) => `${r.kind}:${r.name}`
 const fromKey = (k) => ({ kind: k.slice(0, k.indexOf(':')), name: k.slice(k.indexOf(':') + 1) })
-const fmtDate = (t) => t ? new Date(t * 1000).toLocaleString('it-IT', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''
+const fmtDate = (ts) => ts ? new Date(ts * 1000).toLocaleString('it-IT', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : ''
 
 const remember = (k, v) => { try { localStorage.setItem(k, v) } catch { /* ignore */ } }
 const recall = (k) => { try { return localStorage.getItem(k) || '' } catch { return '' } }
@@ -93,7 +94,7 @@ export default function Home({ labs, folders, info, templates, me, onOpen, onRef
       } else {
         const target = dest ? `${dest}/${baseOf(it.name)}` : baseOf(it.name)
         if (target === it.name) continue
-        if (inside(dest, it.name)) throw new Error(`Non puoi spostare "${baseOf(it.name)}" dentro se stessa`)
+        if (inside(dest, it.name)) throw new Error(t('home.cantMoveInside', { name: baseOf(it.name) }))
         await api('/folders', { method: 'PUT', body: { path: it.name, new: target } })
         if (inside(path, it.name)) setPath(target + path.slice(it.name.length))
       }
@@ -102,8 +103,13 @@ export default function Home({ labs, folders, info, templates, me, onOpen, onRef
   })
   const deleteItems = (items) => {
     const nl = items.filter((i) => i.kind === 'lab').length, nf = items.length - nl
-    const what = [nl && `${nl} lab`, nf && `${nf} cartell${nf > 1 ? 'e' : 'a'}`].filter(Boolean).join(' e ')
-    if (!confirm(items.length === 1 ? `Eliminare "${baseOf(items[0].name)}"${nl ? ' con tutti i dischi dei nodi' : ''}?` : `Eliminare ${what}?`)) return
+    const labPart = nl ? (nl > 1 ? t('home.nLabs', { n: nl }) : t('home.oneLab')) : ''
+    const folderPart = nf ? (nf > 1 ? t('home.nFolders', { n: nf }) : t('home.oneFolder')) : ''
+    const what = [labPart, folderPart].filter(Boolean).join(t('home.andJoin'))
+    const msg = items.length === 1
+      ? (nl ? t('home.confirmDeleteLab', { name: baseOf(items[0].name) }) : t('home.confirmDeleteFolder', { name: baseOf(items[0].name) }))
+      : t('home.confirmDeleteMany', { what })
+    if (!confirm(msg)) return
     run(async () => {
       for (const it of items.filter((i) => i.kind === 'lab')) await api(`/labs/${encodeURIComponent(it.name)}`, { method: 'DELETE' })
       // deepest folders first
@@ -123,7 +129,7 @@ export default function Home({ labs, folders, info, templates, me, onOpen, onRef
     items.filter((i) => i.kind === 'lab').forEach((it, i) => setTimeout(() => downloadExport(it.name, format), i * 300))
   }
   const exportItems = (items) => [
-    { head: 'Esporta' },
+    { head: t('home.export') },
     ...EXPORT_FORMATS.map((f) => ({ icon: f.icon, label: f.label, disabled: !items.some((i) => i.kind === 'lab'), onClick: () => exportLabs(items, f.id) })),
   ]
   const editItem = (it) => it.kind === 'folder'
@@ -173,12 +179,12 @@ export default function Home({ labs, folders, info, templates, me, onOpen, onRef
 
   // ------------------------------------------------------------ menus
   const newItems = [
-    { icon: 'folderPlus', label: 'Nuova cartella', onClick: () => setDialog({ kind: 'folder', parent: path }) },
-    { icon: 'plus', label: 'Nuovo lab', onClick: () => setDialog({ kind: 'new' }) },
-    { icon: 'links', label: 'Genera lab (topologia pronta)…', onClick: () => setDialog({ kind: 'generate' }) },
-    { icon: 'upload', label: 'Importa lab (containerlab, CML, GNS3, EVE)…', onClick: () => setDialog({ kind: 'import' }) },
+    { icon: 'folderPlus', label: t('home.newFolder'), onClick: () => setDialog({ kind: 'folder', parent: path }) },
+    { icon: 'plus', label: t('home.newLab'), onClick: () => setDialog({ kind: 'new' }) },
+    { icon: 'links', label: t('home.generateLab'), onClick: () => setDialog({ kind: 'generate' }) },
+    { icon: 'upload', label: t('home.importLab'), onClick: () => setDialog({ kind: 'import' }) },
     { sep: true },
-    { icon: 'refresh', label: 'Aggiorna', onClick: onRefresh },
+    { icon: 'refresh', label: t('common.refresh'), onClick: onRefresh },
   ]
   const rowMenu = (e, r) => {
     e.preventDefault(); e.stopPropagation()
@@ -188,29 +194,29 @@ export default function Home({ labs, folders, info, templates, me, onOpen, onRef
     const lab = r.kind === 'lab' ? r.lab : null
     setMenu({
       x: e.clientX, y: e.clientY, icon: multi ? 'select' : lab ? 'links' : 'folder',
-      title: multi ? `${items.length} elementi` : baseOf(r.name),
+      title: multi ? t('home.nItems', { n: items.length }) : baseOf(r.name),
       items: multi ? [
-        items.some((i) => i.kind === 'lab') && { icon: 'stop', label: 'Ferma i lab', onClick: () => stopLabs(items.filter((i) => i.kind === 'lab').map((i) => i.name)) },
-        { icon: 'move', label: 'Sposta in…', onClick: () => setDialog({ kind: 'move', items }) },
+        items.some((i) => i.kind === 'lab') && { icon: 'stop', label: t('home.stopLabs'), onClick: () => stopLabs(items.filter((i) => i.kind === 'lab').map((i) => i.name)) },
+        { icon: 'move', label: t('home.moveTo'), onClick: () => setDialog({ kind: 'move', items }) },
         ...exportItems(items),
         { sep: true },
-        { icon: 'trash', label: 'Elimina', danger: true, onClick: () => deleteItems(items) },
+        { icon: 'trash', label: t('common.delete'), danger: true, onClick: () => deleteItems(items) },
       ] : lab ? [
-        { icon: 'open', label: 'Apri lab', onClick: () => onOpen(lab.name) },
-        lab.status !== 'stopped' && { icon: 'stop', label: 'Ferma lab', onClick: () => stopLabs([lab.name]) },
-        { icon: 'edit', label: 'Modifica dettagli', onClick: () => editItem(r) },
-        lab.access === 'owner' && { icon: 'user', label: 'Condividi…', onClick: () => setDialog({ kind: 'share', lab }) },
-        { icon: 'move', label: 'Sposta in…', onClick: () => setDialog({ kind: 'move', items }) },
+        { icon: 'open', label: t('home.openLab'), onClick: () => onOpen(lab.name) },
+        lab.status !== 'stopped' && { icon: 'stop', label: t('home.stopLab'), onClick: () => stopLabs([lab.name]) },
+        { icon: 'edit', label: t('home.editDetails'), onClick: () => editItem(r) },
+        lab.access === 'owner' && { icon: 'user', label: t('home.share'), onClick: () => setDialog({ kind: 'share', lab }) },
+        { icon: 'move', label: t('home.moveTo'), onClick: () => setDialog({ kind: 'move', items }) },
         ...exportItems(items),
         { sep: true },
-        { icon: 'trash', label: 'Elimina lab', danger: true, disabled: lab.running > 0 || lab.access !== 'owner', onClick: () => deleteItems(items) },
+        { icon: 'trash', label: t('home.deleteLab'), danger: true, disabled: lab.running > 0 || lab.access !== 'owner', onClick: () => deleteItems(items) },
       ] : [
-        { icon: 'folder', label: 'Apri', onClick: () => go(r.name) },
-        { icon: 'folderPlus', label: 'Nuova sottocartella', onClick: () => setDialog({ kind: 'folder', parent: r.name }) },
-        { icon: 'edit', label: 'Rinomina', onClick: () => editItem(r) },
-        { icon: 'move', label: 'Sposta in…', onClick: () => setDialog({ kind: 'move', items }) },
+        { icon: 'folder', label: t('common.open'), onClick: () => go(r.name) },
+        { icon: 'folderPlus', label: t('home.newSubfolder'), onClick: () => setDialog({ kind: 'folder', parent: r.name }) },
+        { icon: 'edit', label: t('common.rename'), onClick: () => editItem(r) },
+        { icon: 'move', label: t('home.moveTo'), onClick: () => setDialog({ kind: 'move', items }) },
         { sep: true },
-        { icon: 'trash', label: 'Elimina cartella', danger: true, disabled: labCount(r.name) > 0, onClick: () => deleteItems(items) },
+        { icon: 'trash', label: t('home.deleteFolder'), danger: true, disabled: labCount(r.name) > 0, onClick: () => deleteItems(items) },
       ],
     })
   }
@@ -233,7 +239,7 @@ export default function Home({ labs, folders, info, templates, me, onOpen, onRef
   const toggle = (r) => setChecked((c) => { const n = new Set(c); n.has(key(r)) ? n.delete(key(r)) : n.add(key(r)); return n })
   const allOn = rows.length > 0 && rows.every((r) => checked.has(key(r)))
   const crumbs = path ? path.split('/').map((seg, i, a) => ({ name: seg, path: a.slice(0, i + 1).join('/') })) : []
-  const blockedDelete = targets.some((t) => t.kind === 'lab' ? labs.find((l) => l.name === t.name)?.running > 0 : labCount(t.name) > 0)
+  const blockedDelete = targets.some((tg) => tg.kind === 'lab' ? labs.find((l) => l.name === tg.name)?.running > 0 : labCount(tg.name) > 0)
 
   return (
     <div className="dash">
@@ -301,41 +307,41 @@ export default function Home({ labs, folders, info, templates, me, onOpen, onRef
         <section className="ws-files">
           <label className="search">
             <Ui name="search" size={16} />
-            <input placeholder={view === 'running' ? 'Cerca tra i lab avviati' : 'Cerca lab e cartelle'} value={query} onChange={(e) => setQuery(e.target.value)} />
-            {query && <button className="icon-btn" onClick={() => setQuery('')} title="Pulisci"><Ui name="close" size={14} /></button>}
+            <input placeholder={view === 'running' ? t('home.searchRunning') : t('home.searchFiles')} value={query} onChange={(e) => setQuery(e.target.value)} />
+            {query && <button className="icon-btn" onClick={() => setQuery('')} title={t('home.clear')}><Ui name="close" size={14} /></button>}
           </label>
 
           <div className="ws-tools">
-            <label className="tb-check" title="Seleziona tutto">
+            <label className="tb-check" title={t('home.selectAll')}>
               <input type="checkbox" checked={allOn} disabled={!rows.length}
                 onChange={() => setChecked(allOn ? new Set() : new Set(rows.map(key)))} />
             </label>
             <span className="tb-sep" />
-            <Tool icon="folderPlus" tip="Nuova cartella" disabled={view !== 'files' || !canCreate} onClick={() => setDialog({ kind: 'folder', parent: path })} />
-            <Tool icon="plus" tip="Nuovo lab" disabled={view !== 'files' || !canCreate} onClick={() => setDialog({ kind: 'new' })} />
-            <Tool icon="links" tip="Genera lab con una topologia pronta (CLOS, anello, stella…)" disabled={view !== 'files' || !canCreate} onClick={() => setDialog({ kind: 'generate' })} />
-            <Tool icon="upload" tip="Importa lab da containerlab, CML, GNS3, EVE-NG/PNETLab o NetSO" disabled={view !== 'files' || !canCreate} onClick={() => setDialog({ kind: 'import' })} />
+            <Tool icon="folderPlus" tip={t('home.newFolder')} disabled={view !== 'files' || !canCreate} onClick={() => setDialog({ kind: 'folder', parent: path })} />
+            <Tool icon="plus" tip={t('home.newLab')} disabled={view !== 'files' || !canCreate} onClick={() => setDialog({ kind: 'new' })} />
+            <Tool icon="links" tip={t('home.generateLabTip')} disabled={view !== 'files' || !canCreate} onClick={() => setDialog({ kind: 'generate' })} />
+            <Tool icon="upload" tip={t('home.importLabTip')} disabled={view !== 'files' || !canCreate} onClick={() => setDialog({ kind: 'import' })} />
             <span className="tb-sep" />
-            <Tool icon="edit" tip={one?.kind === 'folder' ? 'Rinomina cartella' : 'Modifica dettagli lab'} disabled={!one} onClick={() => editItem(one)} />
-            <Tool icon="move" tip="Sposta in…" disabled={!targets.length} onClick={() => setDialog({ kind: 'move', items: targets })} />
-            <Tool icon="download" tip="Esporta (NetSO, containerlab, CML)" disabled={!targets.some((t) => t.kind === 'lab')}
-              onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setMenu({ x: r.left, y: r.bottom + 6, title: 'Esporta', icon: 'download', items: exportItems(targets).slice(1) }) }} />
-            <Tool icon="trash" tip={blockedDelete ? 'Ferma i lab / svuota le cartelle prima di eliminarli' : 'Elimina'} danger
+            <Tool icon="edit" tip={one?.kind === 'folder' ? t('home.renameFolder') : t('home.editLabDetails')} disabled={!one} onClick={() => editItem(one)} />
+            <Tool icon="move" tip={t('home.moveTo')} disabled={!targets.length} onClick={() => setDialog({ kind: 'move', items: targets })} />
+            <Tool icon="download" tip={t('home.exportTip')} disabled={!targets.some((tg) => tg.kind === 'lab')}
+              onClick={(e) => { const r = e.currentTarget.getBoundingClientRect(); setMenu({ x: r.left, y: r.bottom + 6, title: t('home.export'), icon: 'download', items: exportItems(targets).slice(1) }) }} />
+            <Tool icon="trash" tip={blockedDelete ? t('home.deleteBlocked') : t('common.delete')} danger
               disabled={!targets.length || blockedDelete} onClick={() => deleteItems(targets)} />
             <span className="tb-sep" />
-            <Tool icon="refresh" tip="Aggiorna" onClick={onRefresh} />
+            <Tool icon="refresh" tip={t('common.refresh')} onClick={onRefresh} />
             <span className="tb-sep" />
-            <Tool icon="nodes" tip="Vista a griglia" on={grid} onClick={() => setGridPref(true)} />
-            <Tool icon="config" tip="Vista a lista" on={!grid} onClick={() => setGridPref(false)} />
+            <Tool icon="nodes" tip={t('home.gridView')} on={grid} onClick={() => setGridPref(true)} />
+            <Tool icon="config" tip={t('home.listView')} on={!grid} onClick={() => setGridPref(false)} />
             <div className="spacer" />
-            {checked.size > 0 && <span className="tb-count">{checked.size} selezionat{checked.size > 1 ? 'i' : 'o'} <button className="ghost mini" onClick={() => setChecked(new Set())}>annulla</button></span>}
+            {checked.size > 0 && <span className="tb-count">{checked.size > 1 ? t('home.selectedMany', { n: checked.size }) : t('home.selectedOne', { n: checked.size })} <button className="ghost mini" onClick={() => setChecked(new Set())}>{t('home.clearSel')}</button></span>}
           </div>
 
           <div className={grid ? 'fm-grid' : 'fm-list'} onClick={() => setSel(null)}
             onContextMenu={(e) => { e.preventDefault(); if (view === 'files') setMenu({ x: e.clientX, y: e.clientY, title: path ? baseOf(path) : 'root', icon: 'folder', items: newItems }) }}>
             {view === 'files' && path && !q && (grid
               ? <div className={`card up folder ${dropAt === parentOf(path) ? 'drop' : ''}`} onClick={(e) => { e.stopPropagation(); go(parentOf(path)) }} {...dropTarget(parentOf(path))}>
-                <span className="card-ico folder"><Ui name="folder" size={28} /></span><b className="card-name">..</b><small className="card-meta">su</small></div>
+                <span className="card-ico folder"><Ui name="folder" size={28} /></span><b className="card-name">..</b><small className="card-meta">{t('home.up')}</small></div>
               : <div className={`fm-row up ${dropAt === parentOf(path) ? 'drop' : ''}`}
                 onClick={(e) => { e.stopPropagation(); go(parentOf(path)) }} {...dropTarget(parentOf(path))}>
                 <span />
@@ -357,18 +363,18 @@ export default function Home({ labs, folders, info, templates, me, onOpen, onRef
                     <div className="card-head"><Check on={ticked} onChange={() => toggle(r)} /><RowMore onClick={(e) => rowMenu(e, r)} /></div>
                     <span className="card-ico folder"><Ui name="folder" size={28} /></span>
                     <b className="card-name">{baseOf(r.name)}</b>
-                    <small className="card-meta">{labCount(r.name)} lab</small>
+                    <small className="card-meta">{t('home.labs', { n: labCount(r.name) })}</small>
                   </div>
                 ) : (
                   <div key={key(r)} className={`card lab ${r.lab.status} ${on ? 'on' : ''} ${ticked ? 'ticked' : ''}`} {...common} onDoubleClick={() => openLab(r.name)}>
                     <div className="card-head">
                       <Check on={ticked} onChange={() => toggle(r)} />
-                      {r.lab.status !== 'stopped' && <span className={`pill ${r.lab.status}`}>{fmtStatus[r.lab.status] || r.lab.status}</span>}
+                      {r.lab.status !== 'stopped' && <span className={`pill ${r.lab.status}`}>{statusLabel(r.lab.status)}</span>}
                       <RowMore onClick={(e) => rowMenu(e, r)} />
                     </div>
                     <div className={`card-thumb ${r.lab.status}`} draggable={false}><MiniTopo name={r.name} ver={`${r.lab.modified}-${r.lab.status}-${r.lab.running}`} templates={templates} /></div>
                     <b className="card-name">{r.name}</b>
-                    <small className="card-meta">{r.lab.nodes} nodi{r.lab.running ? ` · ${r.lab.running} attivi` : ''}</small>
+                    <small className="card-meta">{t('home.nodes', { n: r.lab.nodes })}{r.lab.running ? ` · ${t('home.active', { n: r.lab.running })}` : ''}</small>
                     <small className="card-date">{fmtDate(r.lab.modified)}</small>
                   </div>
                 )
@@ -381,7 +387,7 @@ export default function Home({ labs, folders, info, templates, me, onOpen, onRef
                     <span className="fm-ico folder"><Ui name="folder" size={16} /></span>
                     <span className="fm-txt"><b>{baseOf(r.name)}</b>{q && parentOf(r.name) && <small>{parentOf(r.name)}</small>}</span>
                   </span>
-                  <span className="fm-meta">{labCount(r.name)} lab</span>
+                  <span className="fm-meta">{t('home.labs', { n: labCount(r.name) })}</span>
                   <span className="fm-end"><RowMore onClick={(e) => rowMenu(e, r)} /></span>
                 </div>
               ) : (
@@ -391,12 +397,12 @@ export default function Home({ labs, folders, info, templates, me, onOpen, onRef
                     <span className={`fm-ico lab ${r.lab.status}`}><Ui name="links" size={16} /></span>
                     <span className="fm-txt">
                       <b>{r.name}</b>
-                      <small>{(q || view === 'running') && r.lab.folder ? `${r.lab.folder} · ` : ''}{r.lab.nodes} nodi{r.lab.running ? ` · ${r.lab.running} attivi` : ''}</small>
+                      <small>{(q || view === 'running') && r.lab.folder ? `${r.lab.folder} · ` : ''}{t('home.nodes', { n: r.lab.nodes })}{r.lab.running ? ` · ${t('home.active', { n: r.lab.running })}` : ''}</small>
                     </span>
                   </span>
                   <span className="fm-meta">{fmtDate(r.lab.modified)}</span>
                   <span className="fm-end">
-                    {r.lab.status !== 'stopped' && <span className={`pill ${r.lab.status}`}>{fmtStatus[r.lab.status] || r.lab.status}</span>}
+                    {r.lab.status !== 'stopped' && <span className={`pill ${r.lab.status}`}>{statusLabel(r.lab.status)}</span>}
                     <RowMore onClick={(e) => rowMenu(e, r)} />
                   </span>
                 </div>
@@ -405,8 +411,8 @@ export default function Home({ labs, folders, info, templates, me, onOpen, onRef
             {rows.length === 0 && (
               <div className="fm-empty">
                 <Ui name={q ? 'search' : view === 'running' ? 'play' : 'folder'} size={34} />
-                <p>{q ? 'Nessun risultato.' : view === 'running' ? 'Nessun lab avviato.' : path ? 'Questa cartella è vuota.' : 'Nessun lab ancora.'}</p>
-                {!q && view !== 'running' && <small className="muted">Usa i pulsanti in alto per creare una cartella o un lab.</small>}
+                <p>{q ? t('home.noResults') : view === 'running' ? t('home.noRunning') : path ? t('home.emptyFolder') : t('home.noLabs')}</p>
+                {!q && view !== 'running' && <small className="muted">{t('home.emptyHint')}</small>}
               </div>
             )}
           </div>
@@ -414,24 +420,24 @@ export default function Home({ labs, folders, info, templates, me, onOpen, onRef
 
         {/* ---------------------------------------------- preview */}
         <aside className="ws-preview">
-          <h3 className="pv-title"><Ui name="links" size={18} /> Anteprima lab</h3>
+          <h3 className="pv-title"><Ui name="links" size={18} /> {t('home.labPreview')}</h3>
           {selLab ? <LabPreview key={selLab.name} lab={selLab} templates={templates} onOpen={() => onOpen(selLab.name)}
             onEdit={() => editItem({ kind: 'lab', name: selLab.name })} onDelete={() => deleteItems([{ kind: 'lab', name: selLab.name }])} onError={onError} />
             : sel?.kind === 'folder' ? <FolderPreview folder={sel.name} folders={folders} labs={labs} onOpen={() => go(sel.name)}
               onRename={() => editItem(sel)} onDelete={() => deleteItems([sel])} />
-            : <><div className="topo-box empty"><span className="muted">Seleziona un lab per vederne la topologia</span></div>
+            : <><div className="topo-box empty"><span className="muted">{t('home.selectToPreview')}</span></div>
               </>}
         </aside>
       </div>
 
       {menu && <ContextMenu {...menu} onClose={() => setMenu(null)} />}
-      {dialog?.kind === 'folder' && <NameDialog title="Nuova cartella" sub={dialog.parent ? `dentro ${dialog.parent}` : 'in root'} icon="folderPlus"
-        label="Nome cartella" pattern={FOLDER_RE} onClose={() => setDialog(null)}
+      {dialog?.kind === 'folder' && <NameDialog title={t('home.newFolder')} sub={dialog.parent ? t('home.insideFolder', { folder: dialog.parent }) : t('home.inRoot')} icon="folderPlus"
+        label={t('home.folderName')} pattern={FOLDER_RE} onClose={() => setDialog(null)}
         onSubmit={(n) => run(async () => { await api('/folders', { method: 'POST', body: { path: dialog.parent ? `${dialog.parent}/${n}` : n } }); setDialog(null) })} />}
-      {dialog?.kind === 'rename' && <NameDialog title="Rinomina cartella" sub={dialog.folder} icon="edit" label="Nuovo nome" pattern={FOLDER_RE}
+      {dialog?.kind === 'rename' && <NameDialog title={t('home.renameFolder')} sub={dialog.folder} icon="edit" label={t('home.newName')} pattern={FOLDER_RE}
         initial={baseOf(dialog.folder)} onClose={() => setDialog(null)}
-        onSubmit={(n) => { const f = dialog.folder; const p = parentOf(f); const t = p ? `${p}/${n}` : n
-          run(async () => { await api('/folders', { method: 'PUT', body: { path: f, new: t } }); if (inside(path, f)) setPath(t + path.slice(f.length)); setDialog(null) }) }} />}
+        onSubmit={(n) => { const f = dialog.folder; const p = parentOf(f); const tgt = p ? `${p}/${n}` : n
+          run(async () => { await api('/folders', { method: 'PUT', body: { path: f, new: tgt } }); if (inside(path, f)) setPath(tgt + path.slice(f.length)); setDialog(null) }) }} />}
       {dialog?.kind === 'meta' && dialog.lab && <MetaDialog lab={dialog.lab} onClose={() => setDialog(null)}
         onSave={(body) => run(async () => { await api(`/labs/${encodeURIComponent(dialog.lab.name)}/meta`, { method: 'PUT', body }); setDialog(null) })} />}
       {dialog?.kind === 'move' && <MoveDialog folders={folders} items={dialog.items} labs={labs} onClose={() => setDialog(null)}
@@ -451,7 +457,7 @@ export default function Home({ labs, folders, info, templates, me, onOpen, onRef
       {dialog?.kind === 'status' && <StatusDialog onClose={() => setDialog(null)} onError={onError} />}
       {drag && <div className="drag-ghost" style={{ left: drag.x + 14, top: drag.y + 10 }}>
         <Ui name={drag.items.length > 1 ? 'select' : fromKey(drag.items[0]).kind === 'lab' ? 'links' : 'folder'} size={14} />
-        {drag.items.length > 1 ? `${drag.items.length} elementi` : baseOf(fromKey(drag.items[0]).name)}
+        {drag.items.length > 1 ? t('home.nItems', { n: drag.items.length }) : baseOf(fromKey(drag.items[0]).name)}
       </div>}
     </div>
   )
@@ -470,14 +476,16 @@ function Check({ on, onChange }) {
 }
 
 function RowMore({ onClick }) {
-  return <button className="icon-btn row-more" title="Azioni" onClick={(e) => { e.stopPropagation(); onClick(e) }}><Ui name="more" size={16} /></button>
+  useLang()
+  return <button className="icon-btn row-more" title={t('home.actions')} onClick={(e) => { e.stopPropagation(); onClick(e) }}><Ui name="more" size={16} /></button>
 }
 
 function HostChips({ info, onClick }) {
+  useLang()
   const h = info.host
   const chk = (ok, label) => <span className={`chk ${ok ? 'ok' : 'ko'}`}>{ok ? '✓' : '✗'} {label}</span>
   return (
-    <button className="hostchips" onClick={onClick} title="Stato del server">
+    <button className="hostchips" onClick={onClick} title={t('nav.serverStatus')}>
       <span><b>{h.hostname}</b></span>
       <span>{h.cpus} CPU · {(h.memory_mb / 1024).toFixed(0)} GB</span>
       {chk(h.kvm, 'KVM')}{chk(h.docker, 'Docker')}
@@ -488,6 +496,7 @@ function HostChips({ info, onClick }) {
 
 // ------------------------------------------------------------ preview
 function LabPreview({ lab, templates, onOpen, onEdit, onDelete, onError }) {
+  useLang()
   const [data, setData] = useState(null)
   useEffect(() => {
     let live = true
@@ -495,28 +504,28 @@ function LabPreview({ lab, templates, onOpen, onEdit, onDelete, onError }) {
     return () => { live = false }
   }, [lab.name, lab.status, lab.running, lab.modified, onError])
   const info = [
-    ['Nome', lab.name],
-    ['Cartella', lab.folder || 'root'],
-    ['Autore', lab.author || '—'],
-    ['Proprietario', `${lab.owner || 'admin'}${lab.access && lab.access !== 'owner' ? ` · tuo accesso: ${lab.access === 'edit' ? 'modifica' : 'sola lettura'}` : ''}`],
-    ['Condiviso con', Object.entries(lab.shared || {}).map(([u, l]) => `${u} (${l === 'edit' ? 'modifica' : 'vede'})`).join(', ') || '—'],
-    ['Descrizione', lab.description || '—'],
-    ['Nodi', `${lab.nodes}${lab.running ? ` (${lab.running} attivi)` : ''}`],
-    ['Collegamenti', lab.links],
-    ['Stato', fmtStatus[lab.status] || lab.status],
-    ['Modificato', fmtDate(lab.modified) || '—'],
+    [t('home.name'), lab.name],
+    [t('home.folder'), lab.folder || 'root'],
+    [t('home.author'), lab.author || '—'],
+    [t('home.owner'), `${lab.owner || 'admin'}${lab.access && lab.access !== 'owner' ? ` · ${t('home.yourAccess')}: ${lab.access === 'edit' ? t('home.accEdit') : t('home.accReadonly')}` : ''}`],
+    [t('home.sharedWith'), Object.entries(lab.shared || {}).map(([u, l]) => `${u} (${l === 'edit' ? t('home.accEdit') : t('home.accSees')})`).join(', ') || '—'],
+    [t('home.description'), lab.description || '—'],
+    [t('home.nodesLabel'), `${lab.nodes}${lab.running ? ` ${t('home.activeParen', { n: lab.running })}` : ''}`],
+    [t('home.links'), lab.links],
+    [t('home.stateLabel'), statusLabel(lab.status), `st-${lab.status}`],
+    [t('home.modified'), fmtDate(lab.modified) || '—'],
   ]
   return (
     <div className="pv">
       <TopoView lab={data?.lab} state={data?.state} templates={templates} />
       <div className="pv-actions">
-        <button className="primary" onClick={onOpen}><Ui name="open" size={16} /> Apri</button>
-        <button onClick={onEdit}><Ui name="edit" size={16} /> Modifica</button>
-        <button className="danger" onClick={onDelete} disabled={lab.running > 0} title={lab.running ? 'Ferma il lab prima di eliminarlo' : 'Elimina lab'}><Ui name="trash" size={16} /> Elimina</button>
+        <button className="primary" onClick={onOpen}><Ui name="open" size={16} /> {t('common.open')}</button>
+        <button onClick={onEdit}><Ui name="edit" size={16} /> {t('home.edit')}</button>
+        <button className="danger" onClick={onDelete} disabled={lab.running > 0} title={lab.running ? t('home.stopBeforeDelete') : t('home.deleteLab')}><Ui name="trash" size={16} /> {t('common.delete')}</button>
       </div>
       {data?.warnings?.length > 0 && <div className="pv-warn">{data.warnings[0]}</div>}
       <dl className="pv-info">
-        {info.map(([k, v]) => <div key={k}><dt>{k}</dt><dd className={k === 'Stato' ? `st-${lab.status}` : ''}>{v}</dd></div>)}
+        {info.map(([k, v, cls]) => <div key={k}><dt>{k}</dt><dd className={cls || ''}>{v}</dd></div>)}
       </dl>
     </div>
   )
@@ -524,6 +533,7 @@ function LabPreview({ lab, templates, onOpen, onEdit, onDelete, onError }) {
 
 // Read-only topology with zoom (wheel / buttons) and pan (drag).
 function TopoView({ lab, state, templates }) {
+  useLang()
   const [zoom, setZoom] = useState(1)
   const [pan, setPan] = useState({ x: 0, y: 0 })
   const box = useRef(null)
@@ -545,8 +555,8 @@ function TopoView({ lab, state, templates }) {
     return () => el.removeEventListener('wheel', onWheel)
   }, [geo])
   if (!lab) return <div className="topo-box"><span className="spin" /></div>
-  if (!geo) return <div className="topo-box empty"><span className="muted">Lab vuoto: aprilo per aggiungere nodi</span></div>
-  const tpl = Object.fromEntries(templates.map((t) => [t.name, t]))
+  if (!geo) return <div className="topo-box empty"><span className="muted">{t('home.emptyLabHint')}</span></div>
+  const tpl = Object.fromEntries(templates.map((tp) => [tp.name, tp]))
   const vw = geo.w / zoom, vh = geo.h / zoom
   const vx = geo.cx - vw / 2 - pan.x, vy = geo.cy - vh / 2 - pan.y
   const R = 22
@@ -597,9 +607,9 @@ function TopoView({ lab, state, templates }) {
         })}
       </svg>
       <div className="topo-zoom">
-        <button className="icon-btn" title="Ingrandisci" onClick={() => setZoom((z) => Math.min(6, z * 1.25))}><Ui name="plus" size={15} /></button>
-        <button className="icon-btn" title="Riduci" onClick={() => setZoom((z) => Math.max(0.4, z / 1.25))}><Ui name="minus" size={15} /></button>
-        <button className="icon-btn" title="Adatta" onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }) }}><Ui name="fit" size={15} /></button>
+        <button className="icon-btn" title={t('home.zoomIn')} onClick={() => setZoom((z) => Math.min(6, z * 1.25))}><Ui name="plus" size={15} /></button>
+        <button className="icon-btn" title={t('home.zoomOut')} onClick={() => setZoom((z) => Math.max(0.4, z / 1.25))}><Ui name="minus" size={15} /></button>
+        <button className="icon-btn" title={t('home.fit')} onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }) }}><Ui name="fit" size={15} /></button>
       </div>
     </div>
   )
@@ -634,7 +644,7 @@ function MiniTopo({ name, ver, templates }) {
   if (!data) return <span className="spin" />
   if (!geo) return <span className="thumb-empty"><Ui name="links" size={20} /></span>
   const st = data.state?.nodes || {}
-  const tpl = Object.fromEntries((templates || []).map((t) => [t.name, t]))
+  const tpl = Object.fromEntries((templates || []).map((tp) => [tp.name, tp]))
   const color = (name) => DEVICE_COLORS[(tpl[name]?.icon || 'router').replace(/^(line:|custom:)/, '')] || '#8b7bff'
   return (
     <svg className="thumb-svg" viewBox={`${geo.minX} ${geo.minY} ${geo.w} ${geo.h}`} preserveAspectRatio="xMidYMid meet">
@@ -652,6 +662,7 @@ function MiniTopo({ name, ver, templates }) {
 }
 
 function FolderPreview({ folder, folders, labs, onOpen, onRename, onDelete }) {
+  useLang()
   const sub = folders.filter((f) => parentOf(f) === folder).length
   const direct = labs.filter((l) => l.folder === folder)
   const all = labs.filter((l) => inside(l.folder, folder))
@@ -660,20 +671,21 @@ function FolderPreview({ folder, folders, labs, onOpen, onRename, onDelete }) {
       <div className="topo-box folder">
         <Ui name="folder" size={54} />
         <b>{baseOf(folder)}</b>
-        <span className="muted small">{sub} cartelle · {all.length} lab{all.some((l) => l.running) ? ` · ${all.filter((l) => l.running).length} avviati` : ''}</span>
+        <span className="muted small">{t('home.foldersCount', { n: sub })} · {t('home.labs', { n: all.length })}{all.some((l) => l.running) ? ` · ${t('home.startedCount', { n: all.filter((l) => l.running).length })}` : ''}</span>
       </div>
       <div className="pv-actions">
-        <button className="primary" onClick={onOpen}><Ui name="folder" size={16} /> Apri</button>
-        <button onClick={onRename}><Ui name="edit" size={16} /> Rinomina</button>
-        <button className="danger" onClick={onDelete} disabled={all.length > 0} title={all.length ? 'Sposta o elimina prima i lab contenuti' : 'Elimina cartella'}><Ui name="trash" size={16} /> Elimina</button>
+        <button className="primary" onClick={onOpen}><Ui name="folder" size={16} /> {t('common.open')}</button>
+        <button onClick={onRename}><Ui name="edit" size={16} /> {t('common.rename')}</button>
+        <button className="danger" onClick={onDelete} disabled={all.length > 0} title={all.length ? t('home.moveOrDeleteFirst') : t('home.deleteFolder')}><Ui name="trash" size={16} /> {t('common.delete')}</button>
       </div>
-      {direct.length > 0 && <ul className="pv-list">{direct.slice(0, 12).map((l) => <li key={l.name}><span className={`dot ${l.status}`} />{l.name}<span className="muted small">{l.nodes} nodi</span></li>)}</ul>}
+      {direct.length > 0 && <ul className="pv-list">{direct.slice(0, 12).map((l) => <li key={l.name}><span className={`dot ${l.status}`} />{l.name}<span className="muted small">{t('home.nodes', { n: l.nodes })}</span></li>)}</ul>}
     </div>
   )
 }
 
 // ------------------------------------------------------------ dialogs
 function NameDialog({ title, sub, icon, label, pattern, initial = '', onClose, onSubmit }) {
+  useLang()
   const [v, setV] = useState(initial)
   const ref = useRef(null)
   useEffect(() => { ref.current?.select() }, [])
@@ -683,11 +695,11 @@ function NameDialog({ title, sub, icon, label, pattern, initial = '', onClose, o
         <ModalHead icon={icon} title={title} sub={sub} onClose={onClose} />
         <label className="field"><span>{label}</span>
           <input ref={ref} autoFocus required pattern={pattern} value={v} onChange={(e) => setV(e.target.value)}
-            title="Lettere, numeri, spazio, _ . - (max 40)" />
+            title={t('home.folderNameRule')} />
         </label>
         <div className="row-end">
-          <button type="button" className="ghost" onClick={onClose}>Annulla</button>
-          <button className="primary" type="submit">Salva</button>
+          <button type="button" className="ghost" onClick={onClose}>{t('common.cancel')}</button>
+          <button className="primary" type="submit">{t('common.save')}</button>
         </div>
       </form>
     </div>
@@ -695,18 +707,19 @@ function NameDialog({ title, sub, icon, label, pattern, initial = '', onClose, o
 }
 
 function MetaDialog({ lab, onClose, onSave }) {
+  useLang()
   const [description, setDescription] = useState(lab.description || '')
   const [author, setAuthor] = useState(lab.author || '')
   return (
     <div className="modal-bg" onClick={onClose}>
       <form className="modal" onClick={(e) => e.stopPropagation()} onSubmit={(e) => { e.preventDefault(); onSave({ description, author }) }}>
-        <ModalHead icon="edit" title="Modifica lab" sub={lab.name} onClose={onClose} />
-        <label className="field"><span>Nome</span><input value={lab.name} disabled title="Il nome identifica le reti del lab sul server" /></label>
-        <label className="field"><span>Autore</span><input autoFocus value={author} onChange={(e) => setAuthor(e.target.value)} /></label>
-        <label className="field"><span>Descrizione</span><textarea rows={4} value={description} onChange={(e) => setDescription(e.target.value)} /></label>
+        <ModalHead icon="edit" title={t('home.editLab')} sub={lab.name} onClose={onClose} />
+        <label className="field"><span>{t('home.name')}</span><input value={lab.name} disabled title={t('home.nameLabHint')} /></label>
+        <label className="field"><span>{t('home.author')}</span><input autoFocus value={author} onChange={(e) => setAuthor(e.target.value)} /></label>
+        <label className="field"><span>{t('home.description')}</span><textarea rows={4} value={description} onChange={(e) => setDescription(e.target.value)} /></label>
         <div className="row-end">
-          <button type="button" className="ghost" onClick={onClose}>Annulla</button>
-          <button className="primary" type="submit">Salva</button>
+          <button type="button" className="ghost" onClick={onClose}>{t('common.cancel')}</button>
+          <button className="primary" type="submit">{t('common.save')}</button>
         </div>
       </form>
     </div>
@@ -714,28 +727,29 @@ function MetaDialog({ lab, onClose, onSave }) {
 }
 
 function MoveDialog({ folders, items, labs, onClose, onPick }) {
+  useLang()
   const folderOf = (it) => it.kind === 'lab' ? labs.find((l) => l.name === it.name)?.folder ?? '' : parentOf(it.name)
   const from = new Set(items.map(folderOf))
   const [dest, setDest] = useState(from.size === 1 ? [...from][0] : null)
   const moving = items.filter((i) => i.kind === 'folder').map((i) => i.name)
   const choices = ['', ...folders.filter((f) => !moving.some((m) => inside(f, m)))]
-  const what = items.length === 1 ? `“${baseOf(items[0].name)}”` : `${items.length} elementi`
+  const what = items.length === 1 ? `“${baseOf(items[0].name)}”` : t('home.nItems', { n: items.length })
   return (
     <div className="modal-bg" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <ModalHead icon="move" title={`Sposta ${what}`} sub="Scegli la cartella di destinazione" onClose={onClose} />
+        <ModalHead icon="move" title={t('home.moveTitle', { what })} sub={t('home.chooseDestination')} onClose={onClose} />
         <div className="move-list">
           {choices.map((f) => (
             <button key={f || '/'} className={`tree-item ${dest === f ? 'on' : ''}`} style={{ paddingLeft: 10 + (f ? f.split('/').length : 0) * 16 }}
               onClick={() => setDest(f)} onDoubleClick={() => onPick(f)}>
               <Ui name="folder" size={16} /><span className="grow">{f ? baseOf(f) : 'root'}</span>
-              {from.size === 1 && from.has(f) && <small>attuale</small>}
+              {from.size === 1 && from.has(f) && <small>{t('home.current')}</small>}
             </button>
           ))}
         </div>
         <div className="row-end">
-          <button type="button" className="ghost" onClick={onClose}>Annulla</button>
-          <button className="primary" disabled={dest === null || (from.size === 1 && from.has(dest))} onClick={() => onPick(dest)}>Sposta qui</button>
+          <button type="button" className="ghost" onClick={onClose}>{t('common.cancel')}</button>
+          <button className="primary" disabled={dest === null || (from.size === 1 && from.has(dest))} onClick={() => onPick(dest)}>{t('home.moveHere')}</button>
         </div>
       </div>
     </div>
@@ -743,6 +757,7 @@ function MoveDialog({ folders, items, labs, onClose, onPick }) {
 }
 
 function LabDialog({ mode, folder, onClose, onCreated, onError }) {
+  useLang()
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [yaml, setYaml] = useState('name: mio-lab\ndescription: ""\nnodes: []\nlinks: []\n')
@@ -757,29 +772,33 @@ function LabDialog({ mode, folder, onClose, onCreated, onError }) {
   return (
     <div className="modal-bg" onClick={onClose}>
       <form className={`modal ${mode === 'import' ? 'wide' : ''}`} onClick={(e) => e.stopPropagation()} onSubmit={submit}>
-        <ModalHead icon={mode === 'new' ? 'plus' : 'upload'} title={mode === 'new' ? 'Nuovo lab' : 'Importa lab da YAML'}
+        <ModalHead icon={mode === 'new' ? 'plus' : 'upload'} title={mode === 'new' ? t('home.newLab') : t('home.importYaml')}
           sub={`in ${folder || 'root'}`} onClose={onClose} />
         {mode === 'new' ? <>
-          <label className="field"><span>Nome</span><input autoFocus required pattern={LAB_RE} value={name} onChange={(e) => setName(e.target.value)} placeholder="es. ccna-ospf"
-            title="Inizia con una lettera; lettere, numeri, _ e - (max 32)" /></label>
-          <label className="field"><span>Descrizione</span><input value={description} onChange={(e) => setDescription(e.target.value)} /></label>
+          <label className="field"><span>{t('home.name')}</span><input autoFocus required pattern={LAB_RE} value={name} onChange={(e) => setName(e.target.value)} placeholder={t('home.labNamePlaceholder')}
+            title={t('home.labNameRule')} /></label>
+          <label className="field"><span>{t('home.description')}</span><input value={description} onChange={(e) => setDescription(e.target.value)} /></label>
         </> : <>
           <input type="file" accept=".yml,.yaml" onChange={loadFile} />
           <textarea className="code" value={yaml} onChange={(e) => setYaml(e.target.value)} spellCheck={false} />
         </>}
         <div className="row-end">
-          <button type="button" className="ghost" onClick={onClose}>Annulla</button>
-          <button className="primary" type="submit">Crea</button>
+          <button type="button" className="ghost" onClick={onClose}>{t('common.cancel')}</button>
+          <button className="primary" type="submit">{t('home.create')}</button>
         </div>
       </form>
     </div>
   )
 }
 
-const ROLE_LABEL = { admin: 'Amministratore', user: 'Utente', viewer: 'Sola lettura' }
-const ROLE_HINT = { admin: 'tutto: utenti, dispositivi, immagini, ogni lab', user: 'crea lab e lavora sui suoi e su quelli condivisi', viewer: 'guarda solo i lab condivisi con lui' }
+const ROLES = ['admin', 'user', 'viewer']
+const ROLE_KEY = { admin: 'home.roleAdmin', user: 'home.roleUser', viewer: 'home.roleViewer' }
+const ROLE_HINT_KEY = { admin: 'home.roleAdminHint', user: 'home.roleUserHint', viewer: 'home.roleViewerHint' }
+const roleLabel = (r) => ROLE_KEY[r] ? t(ROLE_KEY[r]) : r
+const roleHint = (r) => t(ROLE_HINT_KEY[r])
 
 function UsersDialog({ me, onClose, onError }) {
+  useLang()
   const [list, setList] = useState([])
   const [form, setForm] = useState(null) // {mode: 'new'|'reset', username, password, role}
   const admin = me?.role === 'admin'
@@ -797,43 +816,43 @@ function UsersDialog({ me, onClose, onError }) {
     try { await api(`/users/${encodeURIComponent(u)}`, { method: 'PUT', body: { username: u, role } }); load() } catch (ex) { onError(ex) }
   }
   const remove = async (u) => {
-    if (!confirm(`Eliminare l'utente "${u}"? I suoi lab passano all'amministratore.`)) return
+    if (!confirm(t('home.confirmDeleteUser', { name: u }))) return
     try { await api(`/users/${encodeURIComponent(u)}`, { method: 'DELETE' }); load() } catch (ex) { onError(ex) }
   }
   return (
     <div className="modal-bg" onClick={onClose}>
       <div className="modal wide" onClick={(e) => e.stopPropagation()}>
-        <ModalHead icon="user" title="Utenti" sub="Chi può accedere a NetSO e cosa può fare" onClose={onClose} />
+        <ModalHead icon="user" title={t('nav.users')} sub={t('home.usersSub')} onClose={onClose} />
         <table className="tbl">
-          <thead><tr><th>Utente</th><th>Ruolo</th><th /></tr></thead>
+          <thead><tr><th>{t('home.user')}</th><th>{t('home.role')}</th><th /></tr></thead>
           <tbody>
             {list.map((u) => (
               <tr key={u.name}>
-                <td><span className="avatar sm">{u.name.slice(0, 1).toUpperCase()}</span> {u.name}{u.name === me?.user && <span className="muted small"> (tu)</span>}</td>
+                <td><span className="avatar sm">{u.name.slice(0, 1).toUpperCase()}</span> {u.name}{u.name === me?.user && <span className="muted small"> {t('home.you')}</span>}</td>
                 <td>{admin && u.name !== me?.user
-                  ? <select className="cell" value={u.role} onChange={(e) => setRole(u.name, e.target.value)}>{Object.entries(ROLE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
-                  : <span className={`role r-${u.role}`}>{ROLE_LABEL[u.role] || u.role}</span>}</td>
+                  ? <select className="cell" value={u.role} onChange={(e) => setRole(u.name, e.target.value)}>{ROLES.map((k) => <option key={k} value={k}>{roleLabel(k)}</option>)}</select>
+                  : <span className={`role r-${u.role}`}>{roleLabel(u.role)}</span>}</td>
                 <td className="row-end">
-                  {(admin || u.name === me?.user) && <button className="mini" onClick={() => setForm({ mode: 'reset', username: u.name, password: '' })}><Ui name="key" size={13} /> Password</button>}
+                  {(admin || u.name === me?.user) && <button className="mini" onClick={() => setForm({ mode: 'reset', username: u.name, password: '' })}><Ui name="key" size={13} /> {t('home.password')}</button>}
                   {admin && <button className="mini danger" disabled={u.name === me?.user} onClick={() => remove(u.name)}><Ui name="trash" size={13} /></button>}
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
-        <ul className="role-help">{Object.entries(ROLE_LABEL).map(([k, v]) => <li key={k}><span className={`role r-${k}`}>{v}</span> {ROLE_HINT[k]}</li>)}</ul>
+        <ul className="role-help">{ROLES.map((k) => <li key={k}><span className={`role r-${k}`}>{roleLabel(k)}</span> {roleHint(k)}</li>)}</ul>
         {form ? (
           <form className="user-form" onSubmit={save}>
-            <input placeholder="Nome utente" required pattern="[A-Za-z][A-Za-z0-9_.\-]{0,31}" disabled={form.mode === 'reset'} autoFocus={form.mode === 'new'}
+            <input placeholder={t('home.username')} required pattern="[A-Za-z][A-Za-z0-9_.\-]{0,31}" disabled={form.mode === 'reset'} autoFocus={form.mode === 'new'}
               value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} />
-            <input type="password" placeholder={form.mode === 'new' ? 'Password' : `Nuova password per ${form.username}`} required minLength={4} autoFocus={form.mode === 'reset'}
+            <input type="password" placeholder={form.mode === 'new' ? t('home.password') : t('home.newPasswordFor', { name: form.username })} required minLength={4} autoFocus={form.mode === 'reset'}
               autoComplete="new-password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
-            {form.mode === 'new' && <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>{Object.entries(ROLE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>}
-            <button type="button" className="ghost" onClick={() => setForm(null)}>Annulla</button>
-            <button className="primary">{form.mode === 'new' ? 'Crea' : 'Salva'}</button>
+            {form.mode === 'new' && <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>{ROLES.map((k) => <option key={k} value={k}>{roleLabel(k)}</option>)}</select>}
+            <button type="button" className="ghost" onClick={() => setForm(null)}>{t('common.cancel')}</button>
+            <button className="primary">{form.mode === 'new' ? t('home.create') : t('common.save')}</button>
           </form>
         ) : admin && (
-          <div className="row-end"><button className="primary" onClick={() => setForm({ mode: 'new', username: '', password: '', role: 'user' })}><Ui name="plus" size={15} /> Nuovo utente</button></div>
+          <div className="row-end"><button className="primary" onClick={() => setForm({ mode: 'new', username: '', password: '', role: 'user' })}><Ui name="plus" size={15} /> {t('home.newUser')}</button></div>
         )}
       </div>
     </div>
@@ -841,6 +860,7 @@ function UsersDialog({ me, onClose, onError }) {
 }
 
 function ShareDialog({ lab, me, onClose, onError, onSaved }) {
+  useLang()
   const [users, setUsers] = useState(null)
   const [shared, setShared] = useState({ ...(lab.shared || {}) })
   useEffect(() => { api('/users').then(setUsers).catch(onError) }, [onError])
@@ -851,16 +871,16 @@ function ShareDialog({ lab, me, onClose, onError, onSaved }) {
   return (
     <div className="modal-bg" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <ModalHead icon="user" title={`Condividi «${lab.name}»`} sub={`Proprietario: ${lab.owner}${lab.owner === me?.user ? ' (tu)' : ''}`} onClose={onClose} />
+        <ModalHead icon="user" title={t('home.shareTitle', { name: lab.name })} sub={`${t('home.owner')}: ${lab.owner}${lab.owner === me?.user ? ` ${t('home.you')}` : ''}`} onClose={onClose} />
         <div className="share-list">
           {users === null && <span className="spin" />}
           {others.map((u) => (
             <div key={u.name} className="share-row">
               <span className="avatar sm">{u.name.slice(0, 1).toUpperCase()}</span>
-              <span className="grow"><b>{u.name}</b> <span className="muted small">{ROLE_LABEL[u.role]}</span></span>
-              {u.role === 'admin' ? <span className="muted small">vede già tutto</span> : (
+              <span className="grow"><b>{u.name}</b> <span className="muted small">{roleLabel(u.role)}</span></span>
+              {u.role === 'admin' ? <span className="muted small">{t('home.adminSeesAll')}</span> : (
                 <div className="seg-mini">
-                  {[['', 'Nessuno'], ['view', 'Vede'], ['edit', 'Modifica']].map(([v, l]) => (
+                  {[['', t('home.shareNone')], ['view', t('home.shareSees')], ['edit', t('home.shareEdit')]].map(([v, l]) => (
                     <button key={v} disabled={v === 'edit' && u.role === 'viewer'} className={(shared[u.name] || '') === v ? 'on' : ''}
                       onClick={() => setShared((s) => { const n = { ...s }; if (v) n[u.name] = v; else delete n[u.name]; return n })}>{l}</button>
                   ))}
@@ -868,16 +888,17 @@ function ShareDialog({ lab, me, onClose, onError, onSaved }) {
               )}
             </div>
           ))}
-          {users && !others.length && <p className="muted">Non ci sono altri utenti: creali in Utenti.</p>}
+          {users && !others.length && <p className="muted">{t('home.noOtherUsers')}</p>}
         </div>
-        <p className="hint">«Vede»: apre il lab in sola lettura. «Modifica»: lo cambia, lo avvia, apre le consolle. Solo il proprietario può eliminarlo e condividerlo.</p>
-        <div className="row-end"><button className="ghost" onClick={onClose}>Annulla</button><button className="primary" onClick={save}>Salva</button></div>
+        <p className="hint">{t('home.shareHint')}</p>
+        <div className="row-end"><button className="ghost" onClick={onClose}>{t('common.cancel')}</button><button className="primary" onClick={save}>{t('common.save')}</button></div>
       </div>
     </div>
   )
 }
 
 function ServersDialog({ me, onClose, onError }) {
+  useLang()
   const [list, setList] = useState(null)
   const [status, setStatus] = useState({})
   const [form, setForm] = useState({ name: '', url: '' })
@@ -895,7 +916,7 @@ function ServersDialog({ me, onClose, onError }) {
   return (
     <div className="modal-bg" onClick={onClose}>
       <div className="modal wide" onClick={(e) => e.stopPropagation()}>
-        <ModalHead icon="links" title="Server collegati" sub="Altri server NetSO: aprili da qui e collega i loro lab ai tuoi con un nodo VXLAN" onClose={onClose} />
+        <ModalHead icon="links" title={t('home.linkedServers')} sub={t('home.serversSub')} onClose={onClose} />
         <div className="share-list">
           {list === null && <span className="spin" />}
           {list?.map((s) => {
@@ -904,21 +925,21 @@ function ServersDialog({ me, onClose, onError }) {
               <div key={s.name} className="share-row">
                 <span className={`dot ${st?.online ? 'running' : st ? 'error' : ''}`} />
                 <span className="grow"><b>{s.name}</b> <span className="muted small mono">{s.url}</span>
-                  <small className="muted">{st ? st.online ? `online · NetSO ${st.version}` : `non raggiungibile (${st.error})` : 'controllo…'} · IP per il VXLAN: <code>{s.host}</code></small></span>
-                <a className="btn ghost" href={s.url} target="_blank" rel="noreferrer"><Ui name="open" size={14} /> Apri</a>
+                  <small className="muted">{st ? st.online ? t('home.serverOnline', { version: st.version }) : t('home.serverUnreachable', { error: st.error }) : t('home.serverChecking')} · {t('home.vxlanIp')}: <code>{s.host}</code></small></span>
+                <a className="btn ghost" href={s.url} target="_blank" rel="noreferrer"><Ui name="open" size={14} /> {t('common.open')}</a>
                 {admin && <button className="mini danger" onClick={() => remove(s.name)}><Ui name="trash" size={13} /></button>}
               </div>
             )
           })}
-          {list?.length === 0 && <p className="muted">Nessun server ancora.</p>}
+          {list?.length === 0 && <p className="muted">{t('home.noServers')}</p>}
         </div>
         {admin && <form className="user-form" onSubmit={add}>
-          <input required placeholder="Nome (es. server-2)" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+          <input required placeholder={t('home.serverNamePlaceholder')} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
           <input required placeholder="http://192.168.12.50:8080" value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} />
           <span />
-          <button className="primary"><Ui name="plus" size={15} /> Aggiungi</button>
+          <button className="primary"><Ui name="plus" size={15} /> {t('home.add')}</button>
         </form>}
-        <p className="hint">Per unire due lab: in entrambi aggiungi il dispositivo <b>vxlan</b>, metti l'IP dell'altro server e lo stesso VNI, e collega i dispositivi al nodo VXLAN.</p>
+        <p className="hint">{t('home.vxlanHintA')}<b>vxlan</b>{t('home.vxlanHintB')}</p>
       </div>
     </div>
   )

@@ -1,6 +1,7 @@
 // Automation: save running configs, management inventory, topology generator and automatic layout.
 import { useEffect, useState } from 'react'
 import { api, apiUrl } from './api.js'
+import { t, useLang } from './i18n.js'
 import Icon, { Ui } from './icons.jsx'
 import { ModalHead } from './LabView.jsx'
 
@@ -18,19 +19,20 @@ export async function waitJob(id, onTick) {
 
 // ------------------------------------------------------------------ save configs
 export function SaveConfigsDialog({ name, lab, state, tplByName, initial, onClose, onError, onOpenConfigs, onSaved }) {
+  useLang()
   const rows = lab.nodes.filter((n) => ['qemu', 'docker', 'dynamips', 'iol'].includes(tplByName[n.template]?.kind)).map((n) => {
     const tpl = tplByName[n.template], up = state?.nodes?.[n.name]?.status === 'running'
-    return { name: n.name, tpl, up, ok: up && canSave(tpl), why: !up ? 'spento' : !canSave(tpl) ? 'il template non sa esportare la config' : '' }
+    return { name: n.name, tpl, up, ok: up && canSave(tpl), why: !up ? t('auto.off') : !canSave(tpl) ? t('auto.cantExport') : '' }
   })
   const [pick, setPick] = useState(() => new Set(rows.filter((r) => r.ok && (!initial || initial.includes(r.name))).map((r) => r.name)))
   const [dest, setDest] = useState('active') // active | new
-  const [newSet, setNewSet] = useState(`salvate-${today()}`)
+  const [newSet, setNewSet] = useState(t('auto.savedSetDefault', { d: today() }))
   const [job, setJob] = useState(null)
   const go = async () => {
     try {
       const body = { nodes: [...pick], ...(dest === 'new' ? { set: newSet, new_set: true } : {}) }
       const r = await api(`/labs/${encodeURIComponent(name)}/save-configs`, { method: 'POST', body })
-      setJob({ status: 'running', message: 'Avvio…' })
+      setJob({ status: 'running', message: t('auto.starting') })
       const j = await waitJob(r.job, setJob)
       setJob(j)
       onSaved?.(j.result?.set)
@@ -40,33 +42,33 @@ export function SaveConfigsDialog({ name, lab, state, tplByName, initial, onClos
   return (
     <div className="modal-bg" onClick={onClose}>
       <div className="modal wide" onClick={(e) => e.stopPropagation()}>
-        <ModalHead icon="download" title="Salva la config dai dispositivi" sub="La running-config dei nodi accesi diventa la loro startup config (come «save» di containerlab, «Export CFG» di EVE-NG)" onClose={onClose} />
+        <ModalHead icon="download" title={t('auto.saveConfigsTitle')} sub={t('auto.saveConfigsSub')} onClose={onClose} />
         <div className="def-list">
           {rows.map((r) => (
             <label key={r.name} className={`def-row ${pick.has(r.name) ? 'on' : ''} ${r.ok ? '' : 'dis'}`}>
               <input type="checkbox" disabled={!r.ok || job?.status === 'running'} checked={pick.has(r.name)}
                 onChange={() => setPick((p) => { const n = new Set(p); n.has(r.name) ? n.delete(r.name) : n.add(r.name); return n })} />
               <Icon name={r.tpl?.icon} size={24} />
-              <span className="grow"><b>{r.name}</b> <span className="muted small">{r.tpl?.name} · {r.tpl?.kind === 'docker' ? 'docker exec' : 'dalla consolle seriale'}</span>
+              <span className="grow"><b>{r.name}</b> <span className="muted small">{r.tpl?.name} · {r.tpl?.kind === 'docker' ? 'docker exec' : t('auto.fromSerial')}</span>
                 {r.why && <small className="muted">{r.why}</small>}</span>
-              {res[r.name] && <span className={`pill ${res[r.name] === 'ok' ? 'running' : 'error'}`} title={res[r.name]}>{res[r.name] === 'ok' ? 'salvata' : 'errore'}</span>}
+              {res[r.name] && <span className={`pill ${res[r.name] === 'ok' ? 'running' : 'error'}`} title={res[r.name]}>{res[r.name] === 'ok' ? t('auto.saved') : t('auto.error')}</span>}
             </label>
           ))}
-          {!rows.length && <p className="muted">Nessuna VM o container nel lab.</p>}
+          {!rows.length && <p className="muted">{t('auto.noVmOrContainer')}</p>}
         </div>
         <div className="save-dest">
-          <label className="check"><input type="radio" checked={dest === 'active'} onChange={() => setDest('active')} /> Nel set attivo <code>{lab.config_set || 'default'}</code> (sovrascrive)</label>
-          <label className="check"><input type="radio" checked={dest === 'new'} onChange={() => setDest('new')} /> In un nuovo set
+          <label className="check"><input type="radio" checked={dest === 'active'} onChange={() => setDest('active')} /> {t('auto.inActiveSet')} <code>{lab.config_set || 'default'}</code> {t('auto.overwrites')}</label>
+          <label className="check"><input type="radio" checked={dest === 'new'} onChange={() => setDest('new')} /> {t('auto.inNewSet')}
             <input className="mono" value={newSet} disabled={dest !== 'new'} onChange={(e) => setNewSet(e.target.value)} pattern="[A-Za-z][A-Za-z0-9_\-]{0,31}" /></label>
         </div>
-        <p className="hint">Le VM vengono lette dalla consolle seriale: chiudi la loro consolle aperta prima di salvare. Funziona con IOSv, IOSvL2, Cat8000v, FRR, cEOS, cRPD, SR Linux, VPC.</p>
+        <p className="hint">{t('auto.saveConfigsHint')}</p>
         {job && <div className={`job ${job.status}`}>{job.status === 'running' ? <span className="spin" /> : <Ui name={job.status === 'done' ? 'select' : 'destroy'} size={14} />}
           <span className="grow small">{job.message}</span></div>}
         {Object.entries(res).filter(([, v]) => v !== 'ok').map(([n, v]) => <div key={n} className="warning small">{n}: {v}</div>)}
         <div className="row-end">
-          {job?.status === 'done' && <button onClick={() => onOpenConfigs(job.result?.set)}><Ui name="config" size={15} /> Apri le config</button>}
-          <button className="ghost" onClick={onClose}>Chiudi</button>
-          <button className="primary" disabled={!pick.size || job?.status === 'running'} onClick={go}><Ui name="download" size={15} /> Salva {pick.size} config</button>
+          {job?.status === 'done' && <button onClick={() => onOpenConfigs(job.result?.set)}><Ui name="config" size={15} /> {t('auto.openConfigs')}</button>}
+          <button className="ghost" onClick={onClose}>{t('common.close')}</button>
+          <button className="primary" disabled={!pick.size || job?.status === 'running'} onClick={go}><Ui name="download" size={15} /> {t('auto.saveNConfigs', { n: pick.size })}</button>
         </div>
       </div>
     </div>
@@ -75,23 +77,24 @@ export function SaveConfigsDialog({ name, lab, state, tplByName, initial, onClos
 
 // ------------------------------------------------------------------ inventory
 export function InventoryDialog({ name, onClose, onError, onEditNode }) {
+  useLang()
   const [rows, setRows] = useState(null)
   useEffect(() => { api(`/labs/${encodeURIComponent(name)}/inventory`).then(setRows).catch(onError) }, [name, onError])
   const dl = (format) => { const a = document.createElement('a'); a.href = apiUrl(`/labs/${encodeURIComponent(name)}/inventory`, { format }); a.click() }
-  const copy = (t) => navigator.clipboard?.writeText(t)
+  const copy = (txt) => navigator.clipboard?.writeText(txt)
   return (
     <div className="modal-bg" onClick={onClose}>
       <div className="modal xl" onClick={(e) => e.stopPropagation()}>
-        <ModalHead icon="nodes" title="Gestione e inventario" sub="Rete di gestione 172.20.20.0/24 (come containerlab): IP dei nodi, consolle e file per Ansible/SSH" onClose={onClose} />
+        <ModalHead icon="nodes" title={t('auto.inventoryTitle')} sub={t('auto.inventorySub')} onClose={onClose} />
         <div className="cat-bar">
-          <span className="muted small grow">I container hanno l'IP di gestione su eth0 in automatico (o quello fisso che scegli). Per le VM scegli un'interfaccia e un IP di gestione nel nodo e configurali nel dispositivo.</span>
+          <span className="muted small grow">{t('auto.inventoryIntro')}</span>
           <button onClick={() => dl('ansible')}><Ui name="download" size={15} /> Ansible</button>
           <button onClick={() => dl('hosts')}><Ui name="download" size={15} /> /etc/hosts</button>
           <button onClick={() => dl('ssh')}><Ui name="download" size={15} /> SSH config</button>
         </div>
         <div className="tbl-wrap">
           <table className="tbl">
-            <thead><tr><th>Nodo</th><th>IP di gestione</th><th>Interfaccia</th><th>Consolle</th><th>Ansible</th><th /></tr></thead>
+            <thead><tr><th>{t('auto.colNode')}</th><th>{t('auto.colMgmtIp')}</th><th>{t('auto.colInterface')}</th><th>{t('auto.colConsole')}</th><th>Ansible</th><th /></tr></thead>
             <tbody>
               {rows === null && <tr><td colSpan={6}><span className="spin" /></td></tr>}
               {rows?.map((r) => (
@@ -99,9 +102,9 @@ export function InventoryDialog({ name, onClose, onError, onEditNode }) {
                   <td><span className={`dot ${r.running ? 'running' : ''}`} /> <b>{r.name}</b> <span className="muted small">{r.template}</span></td>
                   <td className="mono">{r.mgmt_ip || <span className="muted">—</span>}</td>
                   <td className="mono small">{r.kind === 'docker' ? 'eth0' : r.mgmt_iface || <span className="muted">—</span>}</td>
-                  <td className="mono small">{r.console ? <button className="link-btn" title="Copia" onClick={() => copy(r.console)}>{r.console}</button> : <span className="muted">spento</span>}</td>
+                  <td className="mono small">{r.console ? <button className="link-btn" title={t('auto.copy')} onClick={() => copy(r.console)}>{r.console}</button> : <span className="muted">{t('auto.off')}</span>}</td>
                   <td className="small muted">{r.ansible_os || (r.kind === 'docker' ? 'docker' : '—')}</td>
-                  <td className="row-acts"><button title="Modifica gestione del nodo" onClick={() => onEditNode(r.name)}><Ui name="edit" size={15} /></button></td>
+                  <td className="row-acts"><button title={t('auto.editNodeMgmt')} onClick={() => onEditNode(r.name)}><Ui name="edit" size={15} /></button></td>
                 </tr>
               ))}
             </tbody>
@@ -113,13 +116,7 @@ export function InventoryDialog({ name, onClose, onError, onEditNode }) {
 }
 
 // ------------------------------------------------------------------ topology generator
-const PATTERNS = [
-  { id: 'clos', label: 'CLOS / spine-leaf', desc: 'Data center: ogni leaf collegato a ogni spine, host sotto i leaf' },
-  { id: 'ring', label: 'Anello', desc: 'Ogni nodo collegato al successivo, l\'ultimo al primo' },
-  { id: 'mesh', label: 'Mesh completa', desc: 'Tutti collegati con tutti' },
-  { id: 'star', label: 'Stella', desc: 'Uno switch (o router) al centro, i nodi intorno' },
-  { id: 'chain', label: 'Catena', desc: 'Nodi in fila uno dopo l\'altro' },
-]
+const PATTERNS = ['clos', 'ring', 'mesh', 'star', 'chain']
 
 function PatternIcon({ id }) {
   const c = 'var(--accent)'
@@ -153,39 +150,41 @@ function genParams(pattern, p, origin = { x: 0, y: 0 }) {
 
 // pattern chooser + per-pattern fields; `devs` are the node choices, `centers` the star centre choices
 function PatternFields({ pattern, setPattern, p, set, devs, centers }) {
+  useLang()
   const tplSel = (k, label, list = devs) => (
     <label className="field"><span>{label}</span>
-      <select value={p[k]} onChange={set(k)}>{list.map((t) => <option key={t.name} value={t.name}>{t.name}</option>)}</select></label>
+      <select value={p[k]} onChange={set(k)}>{list.map((tpl) => <option key={tpl.name} value={tpl.name}>{tpl.name}</option>)}</select></label>
   )
   const num = (k, label, min = 0, max = 64) => <label className="field"><span>{label}</span><input type="number" min={min} max={max} value={p[k]} onChange={set(k)} /></label>
   return (
     <>
       <div className="pat-grid">
-        {PATTERNS.map((x) => (
-          <button key={x.id} type="button" className={`pat ${pattern === x.id ? 'on' : ''}`} onClick={() => setPattern(x.id)} title={x.desc}>
-            <PatternIcon id={x.id} /><b>{x.label}</b>
+        {PATTERNS.map((id) => (
+          <button key={id} type="button" className={`pat ${pattern === id ? 'on' : ''}`} onClick={() => setPattern(id)} title={t(`auto.pat.${id}.desc`)}>
+            <PatternIcon id={id} /><b>{t(`auto.pat.${id}.label`)}</b>
           </button>
         ))}
       </div>
-      <p className="hint">{PATTERNS.find((x) => x.id === pattern).desc}</p>
+      <p className="hint">{t(`auto.pat.${pattern}.desc`)}</p>
       {pattern === 'clos' && <>
-        <div className="grid3">{num('superspines', 'Super-spine', 0, 16)}{num('spines', 'Spine', 1, 32)}{num('leaves', 'Leaf', 1, 64)}</div>
-        <div className="grid3">{tplSel('spine_tpl', 'Dispositivo spine')}{tplSel('leaf_tpl', 'Dispositivo leaf')}{num('hosts', 'Host per leaf', 0, 16)}</div>
-        {p.hosts > 0 && <div className="grid3">{tplSel('host_tpl', 'Dispositivo host')}</div>}
+        <div className="grid3">{num('superspines', t('auto.superspine'), 0, 16)}{num('spines', t('auto.spine'), 1, 32)}{num('leaves', t('auto.leaf'), 1, 64)}</div>
+        <div className="grid3">{tplSel('spine_tpl', t('auto.spineDevice'))}{tplSel('leaf_tpl', t('auto.leafDevice'))}{num('hosts', t('auto.hostsPerLeaf'), 0, 16)}</div>
+        {p.hosts > 0 && <div className="grid3">{tplSel('host_tpl', t('auto.hostDevice'))}</div>}
       </>}
-      {(pattern === 'ring' || pattern === 'mesh' || pattern === 'chain') && <div className="grid3">{num('count', 'Quanti nodi', 2, 32)}{tplSel('tpl', 'Dispositivo')}
-        <label className="field"><span>Nome (prefisso)</span><input value={p.prefix} onChange={set('prefix')} /></label></div>}
-      {pattern === 'star' && <div className="grid3">{tplSel('center_tpl', 'Al centro', centers)}{num('count', 'Nodi intorno', 1, 32)}{tplSel('tpl', 'Dispositivo intorno')}</div>}
+      {(pattern === 'ring' || pattern === 'mesh' || pattern === 'chain') && <div className="grid3">{num('count', t('auto.howManyNodes'), 2, 32)}{tplSel('tpl', t('auto.device'))}
+        <label className="field"><span>{t('auto.namePrefix')}</span><input value={p.prefix} onChange={set('prefix')} /></label></div>}
+      {pattern === 'star' && <div className="grid3">{tplSel('center_tpl', t('auto.center'), centers)}{num('count', t('auto.nodesAround'), 1, 32)}{tplSel('tpl', t('auto.deviceAround'))}</div>}
     </>
   )
 }
 
 export function GenerateDialog({ name, templates, origin, onClose, onError, onAdd }) {
+  useLang()
   const [pattern, setPattern] = useState('clos')
   const [p, setP] = useState(DEFAULT_P)
   const set = (k) => (e) => setP((o) => ({ ...o, [k]: e.target.type === 'number' ? Number(e.target.value) : e.target.value }))
-  const devs = templates.filter((t) => ['qemu', 'docker'].includes(t.kind))
-  const centers = templates.filter((t) => t.kind !== 'external')
+  const devs = templates.filter((tpl) => ['qemu', 'docker'].includes(tpl.kind))
+  const centers = templates.filter((tpl) => tpl.kind !== 'external')
   const est = estimate(pattern, p)
   const go = async () => {
     try {
@@ -195,22 +194,24 @@ export function GenerateDialog({ name, templates, origin, onClose, onError, onAd
   return (
     <div className="modal-bg" onClick={onClose}>
       <div className="modal wide" onClick={(e) => e.stopPropagation()}>
-        <ModalHead icon="links" title="Genera topologia" sub="Aggiunge nodi e collegamenti già fatti al lab (come «generate» di containerlab)" onClose={onClose} />
+        <ModalHead icon="links" title={t('auto.genTopoTitle')} sub={t('auto.genTopoSub')} onClose={onClose} />
         <PatternFields pattern={pattern} setPattern={setPattern} p={p} set={set} devs={devs} centers={centers} />
         <div className="row-end">
-          <span className="muted small grow">Verranno aggiunti <b>{est.n}</b> nodi e <b>{est.l}</b> collegamenti</span>
-          <button className="ghost" onClick={onClose}>Annulla</button>
-          <button className="primary" onClick={go}><Ui name="plus" size={15} /> Aggiungi al lab</button>
+          <span className="muted small grow">{t('auto.willAddPre')} <b>{est.n}</b> {t('auto.willAddNodesAnd')} <b>{est.l}</b> {t('auto.willAddLinks')}</span>
+          <button className="ghost" onClick={onClose}>{t('common.cancel')}</button>
+          <button className="primary" onClick={go}><Ui name="plus" size={15} /> {t('auto.addToLab')}</button>
         </div>
       </div>
     </div>
   )
 }
 
-const LVL = { 1: ['Base', 'lv1'], 2: ['Intermedio', 'lv2'], 3: ['Avanzato', 'lv3'] }
+const LVL = { 1: 'lv1', 2: 'lv2', 3: 'lv3' } // CSS class by level; the name comes from t('auto.lvl.<n>')
+const lvlName = (lv) => (LVL[lv] ? t(`auto.lvl.${lv}`) : '')
 
 // Create a brand-new lab from a ready protocol scenario (OSPF, BGP, sicurezza…), with guide, configs and IPs
 export function GenerateLabDialog({ folder, onClose, onError, onCreated }) {
+  useLang()
   const [scenarios, setScenarios] = useState([])
   const [scenario, setScenario] = useState('')
   const [count, setCount] = useState(4)
@@ -224,8 +225,8 @@ export function GenerateLabDialog({ folder, onClose, onError, onCreated }) {
   useEffect(() => { api('/scenarios').then((s) => { setScenarios(s); setScenario((v) => v || s[0]?.id || '') }).catch(() => {}) }, [])
   useEffect(() => {
     api('/templates').then((ts) => {
-      const rs = ts.filter((t) => t.dialect && t.ready !== false)
-        .map((t) => ({ name: t.name, title: t.title || t.name, dialect: t.dialect, image: t.image || '', choices: t.choices || [] }))
+      const rs = ts.filter((tpl) => tpl.dialect && tpl.ready !== false)
+        .map((tpl) => ({ name: tpl.name, title: tpl.title || tpl.name, dialect: tpl.dialect, image: tpl.image || '', choices: tpl.choices || [] }))
       setRouters(rs)
       setRouter((v) => v || (rs.find((r) => r.dialect === 'frr')?.name) || rs[0]?.name || '')
     }).catch(() => {})
@@ -265,65 +266,65 @@ export function GenerateLabDialog({ folder, onClose, onError, onCreated }) {
   return (
     <div className="modal-bg" onClick={onClose}>
       <form className="modal wide gen-lab" onClick={(e) => e.stopPropagation()} onSubmit={go}>
-        <ModalHead icon="links" title="Genera lab" sub="Un lab pronto per argomento, con guida, config e indirizzi IP già impostati" onClose={onClose} />
-        <label className="field"><span>Nome del lab</span><input autoFocus required pattern="[A-Za-z][A-Za-z0-9 _\-]{0,47}" value={name}
-          onChange={(e) => setName(e.target.value)} placeholder="es. OSPF 1" title="Inizia con una lettera; lettere, numeri, spazi, _ e - (max 48)" /></label>
+        <ModalHead icon="links" title={t('auto.genLabTitle')} sub={t('auto.genLabSub')} onClose={onClose} />
+        <label className="field"><span>{t('auto.labName')}</span><input autoFocus required pattern="[A-Za-z][A-Za-z0-9 _\-]{0,47}" value={name}
+          onChange={(e) => setName(e.target.value)} placeholder={t('auto.labNamePlaceholder')} title={t('auto.labNameTitle')} /></label>
 
         <div className="scn-filters">
           <div className="scn-search"><Ui name="search" size={14} />
-            <input placeholder="Cerca un argomento (es. BGP, OSPF, VLAN…)" value={q} onChange={(e) => setQ(e.target.value)} />
-            {q && <button type="button" className="scn-clear" title="Pulisci" onClick={() => setQ('')}><Ui name="close" size={13} /></button>}
+            <input placeholder={t('auto.searchTopic')} value={q} onChange={(e) => setQ(e.target.value)} />
+            {q && <button type="button" className="scn-clear" title={t('auto.clear')} onClick={() => setQ('')}><Ui name="close" size={13} /></button>}
           </div>
           <div className="scn-chips">
-            <button type="button" className={`scn-chip ${!catFilter ? 'on' : ''}`} onClick={() => setCatFilter('')}>Tutti</button>
+            <button type="button" className={`scn-chip ${!catFilter ? 'on' : ''}`} onClick={() => setCatFilter('')}>{t('auto.all')}</button>
             {cats.map((c) => <button type="button" key={c} className={`scn-chip ${catFilter === c ? 'on' : ''}`} onClick={() => setCatFilter(catFilter === c ? '' : c)}>{c}</button>)}
             <span className="scn-sep" />
-            {[1, 2, 3].map((lv) => <button type="button" key={lv} className={`scn-chip lvl ${LVL[lv][1]} ${lvlFilter === lv ? 'on' : ''}`} onClick={() => setLvlFilter(lvlFilter === lv ? 0 : lv)}>{LVL[lv][0]}</button>)}
+            {[1, 2, 3].map((lv) => <button type="button" key={lv} className={`scn-chip lvl ${LVL[lv]} ${lvlFilter === lv ? 'on' : ''}`} onClick={() => setLvlFilter(lvlFilter === lv ? 0 : lv)}>{lvlName(lv)}</button>)}
           </div>
         </div>
 
-        <label className="field scn-pick"><span>Argomento <small className="muted">· {filtered.length}</small></span>
+        <label className="field scn-pick"><span>{t('auto.topic')} <small className="muted">· {filtered.length}</small></span>
           <select value={filtered.some((s) => s.id === scenario) ? scenario : ''} onChange={(e) => setScenario(e.target.value)} required>
-            {!filtered.length && <option value="" disabled>Nessun argomento trovato — cambia ricerca o filtri</option>}
+            {!filtered.length && <option value="" disabled>{t('auto.noTopicFound')}</option>}
             {cats.filter((c) => filtered.some((s) => s.cat === c)).map((c) => (
               <optgroup key={c} label={c}>
                 {filtered.filter((s) => s.cat === c).map((s) => (
-                  <option key={s.id} value={s.id}>{s.label}{s.custom ? ' · copia pronta' : ` · ${LVL[s.level]?.[0] || ''}`}</option>
+                  <option key={s.id} value={s.id}>{s.label}{s.custom ? ` · ${t('auto.readyCopy')}` : ` · ${lvlName(s.level)}`}</option>
                 ))}
               </optgroup>
             ))}
           </select></label>
 
         <div className="grid2">
-          {!cur?.custom && <label className="field"><span>Numero di nodi (2–20)</span><input type="number" min="2" max="20" value={count} onChange={(e) => setCount(e.target.value)} /></label>}
-          {pickRouter && <label className="field"><span>Router (nodi installati)</span>
+          {!cur?.custom && <label className="field"><span>{t('auto.numNodes')}</span><input type="number" min="2" max="20" value={count} onChange={(e) => setCount(e.target.value)} /></label>}
+          {pickRouter && <label className="field"><span>{t('auto.routerInstalled')}</span>
             {routers.length ? (
               <select value={router} onChange={(e) => setRouter(e.target.value)}>
                 {routers.map((r) => <option key={r.name} value={r.name}>{r.title}{r.dialect === 'frr' ? '' : ' · IOS'}</option>)}
               </select>
-            ) : <input value="Nessun router installato" disabled />}
+            ) : <input value={t('auto.noRouterInstalled')} disabled />}
           </label>}
           {pickRouter && imgs.length > 0 && (
-            <label className="field"><span>Immagine del router</span>
+            <label className="field"><span>{t('auto.routerImage')}</span>
               <select value={image} onChange={(e) => setImage(e.target.value)}>
-                <option value="">{rtpl?.image || 'predefinita'} · predefinita</option>
+                <option value="">{rtpl?.image || t('auto.default')} · {t('auto.default')}</option>
                 {imgs.filter((i) => i !== rtpl?.image).map((i) => <option key={i} value={i}>{i}</option>)}
               </select></label>
           )}
         </div>
 
-        {cur?.custom && <p className="hint">{cur.desc} <b>Copia pronta del lab (topologia e config iniziali già impostate).</b></p>}
+        {cur?.custom && <p className="hint">{cur.desc} <b>{t('auto.readyCopyFull')}</b></p>}
         {cur && !cur.custom && !incompat && <p className="hint">
-          <span className={`lv-badge ${LVL[cur.level]?.[1]}`}>{LVL[cur.level]?.[0]}</span> {cur.desc}
-          {' '}<b>{cur.host ? 'Switch e host' : `Router ${routers.find((r) => r.name === router)?.title || ''}`} con IP già impostati, gli IP sui link e una Guida con passi e soluzione.</b>
+          <span className={`lv-badge ${LVL[cur.level]}`}>{lvlName(cur.level)}</span> {cur.desc}
+          {' '}<b>{cur.host ? t('auto.switchesAndHosts') : `Router ${routers.find((r) => r.name === router)?.title || ''}`} {t('auto.ipGuideTail')}</b>
         </p>}
         {incompat && <p className="hint warn">
-          ⚠ «{cur.label}» si genera solo con <b>FRR</b> (funzione non affidabile su Cisco IOL/IOSv). Scegli FRR come router per questo argomento.
+          ⚠ «{cur.label}» {t('auto.incompatPre')} <b>FRR</b> {t('auto.incompatPost')}
         </p>}
         <div className="row-end">
-          <span className="muted small grow">{cur ? <>Lab di <b>{cur.label}</b>{cur.custom ? ' · copia pronta' : ` · ${count} nodi · topologia casuale`}</> : `${filtered.length} argomenti disponibili`}</span>
-          <button type="button" className="ghost" onClick={onClose}>Annulla</button>
-          <button className="primary" type="submit" disabled={!name || !scenario || incompat}><Ui name="links" size={15} /> Genera lab</button>
+          <span className="muted small grow">{cur ? <>{t('auto.labOf')} <b>{cur.label}</b>{cur.custom ? ` · ${t('auto.readyCopy')}` : ` · ${t('auto.nNodesRandom', { count })}`}</> : t('auto.topicsAvailable', { n: filtered.length })}</span>
+          <button type="button" className="ghost" onClick={onClose}>{t('common.cancel')}</button>
+          <button className="primary" type="submit" disabled={!name || !scenario || incompat}><Ui name="links" size={15} /> {t('auto.genLabTitle')}</button>
         </div>
       </form>
     </div>

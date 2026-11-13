@@ -10,6 +10,14 @@
 import { useSyncExternalStore } from 'react'
 import * as common from './locales/common.js'
 import * as login from './locales/login.js'
+import * as console_ from './locales/console.js'
+import * as agents from './locales/agents.js'
+import * as wireshark from './locales/wireshark.js'
+import * as interop from './locales/interop.js'
+import * as automation from './locales/automation.js'
+import * as home from './locales/home.js'
+import * as catalog from './locales/catalog.js'
+import * as labview from './locales/labview.js'
 
 export const LANGS = [
   { id: 'en', label: 'English' },
@@ -19,8 +27,8 @@ const IDS = LANGS.map((l) => l.id)
 const KEY = 'netso.lang'
 
 const DICT = {
-  en: { ...common.en, ...login.en },
-  it: { ...common.it, ...login.it },
+  en: { ...common.en, ...login.en, ...console_.en, ...agents.en, ...wireshark.en, ...interop.en, ...automation.en, ...home.en, ...catalog.en, ...labview.en },
+  it: { ...common.it, ...login.it, ...console_.it, ...agents.it, ...wireshark.it, ...interop.it, ...automation.it, ...home.it, ...catalog.it, ...labview.it },
 }
 
 let lang = (() => {

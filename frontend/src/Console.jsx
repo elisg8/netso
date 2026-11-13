@@ -5,6 +5,7 @@ import RFB from '@novnc/novnc'
 import Guacamole from 'guacamole-common-js'
 import { api, consoleUrl, getToken, wsUrl } from './api.js'
 import { Ui } from './icons.jsx'
+import { t, useLang } from './i18n.js'
 
 // ------------------------------------------------------------------ clipboard between the Mac and the VM
 const isMac = /Mac|iP(hone|ad|od)/.test(navigator.platform || navigator.userAgent)
@@ -13,14 +14,14 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 const keysymOf = (ch) => { const c = ch.codePointAt(0); return ch === '\n' ? 0xff0d : ch === '\t' ? 0xff09 : c < 0x100 ? c : 0x01000000 + c }
 
 function copyExec(text) {
-  const t = document.createElement('textarea')
-  t.value = text
-  t.style.cssText = 'position:fixed;left:-9999px;top:0'
-  document.body.append(t)
-  t.select()
+  const ta = document.createElement('textarea')
+  ta.value = text
+  ta.style.cssText = 'position:fixed;left:-9999px;top:0'
+  document.body.append(ta)
+  ta.select()
   let ok = false
   try { ok = document.execCommand('copy') } catch { /* not allowed */ }
-  t.remove()
+  ta.remove()
   return ok
 }
 
@@ -98,28 +99,29 @@ function useClipboardBridge(box, ctl, active, defaultMode) {
 }
 
 function ClipPanel({ clip, disabled }) {
+  useLang()
   const [open, setOpen] = useState(false)
   const [text, setText] = useState('')
   return (
     <span className="clip-wrap">
-      <button className={`ghost ${open ? 'on' : ''}`} disabled={disabled} title="Appunti tra il Mac e la VM" onClick={() => setOpen((v) => !v)}><Ui name="copy" size={13} /> Appunti</button>
-      {clip.pending && <button className="ghost clip-pending" title={clip.pending.slice(0, 200)} onClick={() => { copyExec(clip.pending); clip.setPending(null) }}>Copia sul Mac</button>}
+      <button className={`ghost ${open ? 'on' : ''}`} disabled={disabled} title={t('console.clipboardTitle')} onClick={() => setOpen((v) => !v)}><Ui name="copy" size={13} /> {t('console.clipboard')}</button>
+      {clip.pending && <button className="ghost clip-pending" title={clip.pending.slice(0, 200)} onClick={() => { copyExec(clip.pending); clip.setPending(null) }}>{t('console.copyToMac')}</button>}
       {open && (
         <div className="clip-pop">
           <div className="seg small">
             <span className="muted">{isMac ? '⌘V' : 'Ctrl+V'}</span>
-            <button className={clip.mode === 'paste' ? 'on' : ''} onClick={() => clip.setMode('paste')} title="Appunti della VM + Ctrl+V (RDP, o VM con spice-vdagent)">Incolla</button>
-            <button className={clip.mode === 'type' ? 'on' : ''} onClick={() => clip.setMode('type')} title="Scrive il testo tasto per tasto: funziona sempre">Digita</button>
+            <button className={clip.mode === 'paste' ? 'on' : ''} onClick={() => clip.setMode('paste')} title={t('console.pasteModeTitle')}>{t('console.paste')}</button>
+            <button className={clip.mode === 'type' ? 'on' : ''} onClick={() => clip.setMode('type')} title={t('console.typeModeTitle')}>{t('console.type')}</button>
           </div>
-          <textarea rows={4} value={text} onChange={(e) => setText(e.target.value)} placeholder="Testo da mandare alla VM" />
+          <textarea rows={4} value={text} onChange={(e) => setText(e.target.value)} placeholder={t('console.textToVm')} />
           <div className="row-end">
-            <button onClick={() => { clip.sendText(text, 'type') }} disabled={!text}>Digita</button>
-            <button className="primary" onClick={() => { clip.sendText(text, 'paste') }} disabled={!text}>Incolla</button>
+            <button onClick={() => { clip.sendText(text, 'type') }} disabled={!text}>{t('console.type')}</button>
+            <button className="primary" onClick={() => { clip.sendText(text, 'paste') }} disabled={!text}>{t('console.paste')}</button>
           </div>
           {clip.vmText && <>
-            <small className="muted">Copiato nella VM</small>
+            <small className="muted">{t('console.copiedInVm')}</small>
             <textarea rows={3} readOnly value={clip.vmText} />
-            <div className="row-end"><button onClick={() => copyExec(clip.vmText)}>Copia sul Mac</button></div>
+            <div className="row-end"><button onClick={() => copyExec(clip.vmText)}>{t('console.copyToMac')}</button></div>
           </>}
         </div>
       )}
@@ -129,6 +131,7 @@ function ClipPanel({ clip, disabled }) {
 
 // Graphical console (VNC display of a QEMU node, e.g. Windows or a Linux desktop) through the API's websocket proxy.
 function VncConsole({ lab, node, visible, spice }) {
+  useLang()
   const box = useRef(null)
   const rfb = useRef(null)
   const [status, setStatus] = useState('connecting')
@@ -153,7 +156,7 @@ function VncConsole({ lab, node, visible, spice }) {
     r.addEventListener('disconnect', () => { closed = true; setStatus('ended') })
     r.addEventListener('clipboard', (e) => fromVm.current(e.detail.text))
     rfb.current = r
-    ctl.current = { setClipboard: (t) => r.clipboardPasteFrom(t), key: (k, down) => r.sendKey(k, null, down), focus: () => r.focus() }
+    ctl.current = { setClipboard: (txt) => r.clipboardPasteFrom(txt), key: (k, down) => r.sendKey(k, null, down), focus: () => r.focus() }
     return () => { if (!closed) r.disconnect(); rfb.current = null; ctl.current = null }
   }, [lab, node, attempt]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -170,19 +173,19 @@ function VncConsole({ lab, node, visible, spice }) {
     <div className="term vnc-term" ref={wrap} style={{ display: visible ? 'flex' : 'none' }}>
       {clip.sinkEl}
       <div className="vnc-bar">
-        <button className="ghost" disabled={status !== 'on'} title="Invia Ctrl+Alt+Canc (login di Windows)" onClick={() => rfb.current?.sendCtrlAltDel()}>Ctrl+Alt+Canc</button>
+        <button className="ghost" disabled={status !== 'on'} title={t('console.ctrlAltDelTitle')} onClick={() => rfb.current?.sendCtrlAltDel()}>{t('console.ctrlAltDel')}</button>
         <ClipPanel clip={clip} disabled={status !== 'on'} />
-        <button className="ghost" title={fit ? 'Dimensione reale (1:1)' : 'Adatta allo schermo'} onClick={() => setFit((v) => !v)}><Ui name="fit" size={13} /> {fit ? 'Adatta' : '1:1'}</button>
-        <button className="ghost" title="Schermo intero" onClick={fullscreen}><Ui name="expand" size={13} /> Schermo intero</button>
-        <button className="ghost" title="Riconnetti" onClick={() => setAttempt((a) => a + 1)}><Ui name="refresh" size={13} /> Riconnetti</button>
+        <button className="ghost" title={fit ? t('console.realSize') : t('console.fitToScreen')} onClick={() => setFit((v) => !v)}><Ui name="fit" size={13} /> {fit ? t('console.fit') : '1:1'}</button>
+        <button className="ghost" title={t('console.fullscreen')} onClick={fullscreen}><Ui name="expand" size={13} /> {t('console.fullscreen')}</button>
+        <button className="ghost" title={t('console.reconnect')} onClick={() => setAttempt((a) => a + 1)}><Ui name="refresh" size={13} /> {t('console.reconnect')}</button>
         {spice && <SpiceLink lab={lab} node={node} />}
       </div>
       <div className="vnc-screen" ref={box} />
       {status !== 'on' && (
         <div className="ws-overlay">
-          {status === 'connecting' ? <><span className="spin" /><p>Connessione allo schermo di {node}…</p></> : <>
-            <p>Schermo di {node} non raggiungibile (nodo spento o VM ancora in avvio).</p>
-            <button onClick={() => setAttempt((a) => a + 1)}><Ui name="refresh" size={14} /> Riconnetti</button>
+          {status === 'connecting' ? <><span className="spin" /><p>{t('console.connectingScreen', { node })}</p></> : <>
+            <p>{t('console.screenUnreachable', { node })}</p>
+            <button onClick={() => setAttempt((a) => a + 1)}><Ui name="refresh" size={14} /> {t('console.reconnect')}</button>
           </>}
         </div>
       )}
@@ -192,15 +195,17 @@ function VncConsole({ lab, node, visible, spice }) {
 
 // SPICE has no browser client here: the screen is shown over VNC, this opens the real SPICE viewer (remote-viewer)
 function SpiceLink({ lab, node }) {
+  useLang()
   const [port, setPort] = useState(null)
   useEffect(() => { api(`/labs/${encodeURIComponent(lab)}/nodes/${encodeURIComponent(node)}/open`, { method: 'POST', body: {} }).then((r) => setPort(r.port)).catch(() => {}) }, [lab, node])
-  return port ? <a className="btn ghost" href={`spice://${location.hostname}:${port}`} title="Apri con remote-viewer (virt-viewer)">SPICE {location.hostname}:{port}</a> : null
+  return port ? <a className="btn ghost" href={`spice://${location.hostname}:${port}`} title={t('console.spiceLinkTitle')}>SPICE {location.hostname}:{port}</a> : null
 }
 
 const KEYS = { ctrl: 0xffe3, alt: 0xffe9, del: 0xffff }
 
 // RDP / RDP-TLS: Guacamole client on the API tunnel to guacd (Windows login screen, or straight in with credentials)
 function RdpConsole({ lab, node, visible, kind }) {
+  useLang()
   const box = useRef(null)
   const client = useRef(null)
   const [cred, setCred] = useState({ user: '', password: '' })
@@ -230,7 +235,7 @@ function RdpConsole({ lab, node, visible, kind }) {
     const fit = () => { const w = display.getWidth(), h = display.getHeight(); if (w && h) display.scale(Math.min(el.clientWidth / w, (el.clientHeight - 34) / h, 1)) }
     display.onresize = fit
     c.onstatechange = (st) => { if (st === 3) { setStatus('on'); el.focus() } if (st === 5) setStatus((s) => (s === 'form' ? s : 'ended')) }
-    c.onerror = (st) => { setErr(st.message || 'Connessione RDP non riuscita'); setStatus('ended') }
+    c.onerror = (st) => { setErr(st.message || t('console.rdpFailed')); setStatus('ended') }
     const mouse = new Guacamole.Mouse(display.getElement())
     mouse.onEach(['mousedown', 'mouseup', 'mousemove'], (ev) => c.sendMouseState(ev.state, true))
     const kb = new Guacamole.Keyboard(el)
@@ -240,11 +245,11 @@ function RdpConsole({ lab, node, visible, kind }) {
       if (!/^text\//.test(mimetype)) return
       const reader = new Guacamole.StringReader(stream)
       let data = ''
-      reader.ontext = (t) => { data += t }
+      reader.ontext = (chunk) => { data += chunk }
       reader.onend = () => fromVm.current(data)
     }
     ctl.current = {
-      setClipboard: (t) => { const w = new Guacamole.StringWriter(c.createClipboardStream('text/plain')); w.sendText(t); w.sendEnd() },
+      setClipboard: (txt) => { const w = new Guacamole.StringWriter(c.createClipboardStream('text/plain')); w.sendText(txt); w.sendEnd() },
       key: (k, down) => c.sendKeyEvent(down ? 1 : 0, k),
       focus: () => el.focus(),
     }
@@ -256,21 +261,21 @@ function RdpConsole({ lab, node, visible, kind }) {
     <div className="term vnc-term rdp-term" ref={box} tabIndex={0} style={{ display: visible ? 'flex' : 'none' }}>
       {clip.sinkEl}
       <div className="vnc-bar">
-        <button className="ghost" disabled={status !== 'on'} onClick={cad}>Ctrl+Alt+Canc</button>
+        <button className="ghost" disabled={status !== 'on'} onClick={cad}>{t('console.ctrlAltDel')}</button>
         <ClipPanel clip={clip} disabled={status !== 'on'} />
-        <button className="ghost" onClick={() => { disconnect(); setStatus('form') }}><Ui name="refresh" size={13} /> Riconnetti</button>
+        <button className="ghost" onClick={() => { disconnect(); setStatus('form') }}><Ui name="refresh" size={13} /> {t('console.reconnect')}</button>
         <span className="muted small">{kind.toUpperCase()}</span>
       </div>
       <div className="vnc-screen rdp-screen" />
       {status !== 'on' && (
         <div className="ws-overlay">
-          {status === 'connecting' ? <><span className="spin" /><p>Connessione RDP a {node}…</p></> : (
+          {status === 'connecting' ? <><span className="spin" /><p>{t('console.connectingRdp', { node })}</p></> : (
             <form className="rdp-login" onSubmit={connect}>
               <b>{node} · {kind.toUpperCase()}</b>
-              <input placeholder="Utente (facoltativo)" value={cred.user} onChange={(e) => setCred({ ...cred, user: e.target.value })} autoComplete="off" />
-              <input type="password" placeholder="Password" value={cred.password} onChange={(e) => setCred({ ...cred, password: e.target.value })} autoComplete="new-password" />
+              <input placeholder={t('console.userOptional')} value={cred.user} onChange={(e) => setCred({ ...cred, user: e.target.value })} autoComplete="off" />
+              <input type="password" placeholder={t('console.password')} value={cred.password} onChange={(e) => setCred({ ...cred, password: e.target.value })} autoComplete="new-password" />
               {err && <span className="err small">{err}</span>}
-              <button className="primary">Connetti</button>
+              <button className="primary">{t('console.connect')}</button>
             </form>
           )}
         </div>
@@ -281,6 +286,7 @@ function RdpConsole({ lab, node, visible, kind }) {
 
 // WinBox (MikroTik): the NetSO server forwards a port to the router; connect the WinBox app to it
 function ForwardInfo({ lab, node, visible, kind }) {
+  useLang()
   const [info, setInfo] = useState(null)
   const [err, setErr] = useState('')
   useEffect(() => { api(`/labs/${encodeURIComponent(lab)}/nodes/${encodeURIComponent(node)}/open`, { method: 'POST', body: {} }).then(setInfo).catch((e) => setErr(e.message)) }, [lab, node])
@@ -291,7 +297,7 @@ function ForwardInfo({ lab, node, visible, kind }) {
         {err ? <p className="err">{err}</p> : !info ? <span className="spin" /> : <>
           <p>{kind === 'winbox' ? 'WinBox' : kind.toUpperCase()} · {node} ({info.ip})</p>
           <code className="fwd-addr">{addr}</code>
-          <button onClick={() => navigator.clipboard?.writeText(addr)}>Copia</button>
+          <button onClick={() => navigator.clipboard?.writeText(addr)}>{t('console.copy')}</button>
         </>}
       </div>
     </div>
@@ -310,6 +316,7 @@ export default function Console({ lab, node, visible, kind }) {
 // one movable/resizable window holding every open console as a tab; switching a tab keeps the
 // others connected in the background, and a newly opened console comes up focused
 export function ConsoleWindows({ lab, items, kindOf, onClose }) {
+  useLang()
   const [win, setWin] = useState({ x: 90, y: 72, w: 720, h: 460, min: false })
   const [active, setActive] = useState(null)
   const seen = useRef(new Set())
@@ -335,12 +342,12 @@ export function ConsoleWindows({ lab, items, kindOf, onClose }) {
   if (!items.length) return null
   if (win.min) return (
     <div className="cwin-pills">
-      <button className="cwin-pill" title="Ripristina le consolle" onClick={() => upd({ min: false })}><Ui name="console" size={13} /> Consolle ({items.length})</button>
+      <button className="cwin-pill" title={t('console.restoreConsoles')} onClick={() => upd({ min: false })}><Ui name="console" size={13} /> {t('console.consolesCount', { n: items.length })}</button>
     </div>
   )
   return (
     <div className="cwin" style={{ left: win.x, top: win.y, width: win.w, height: win.h, zIndex: 40 }}>
-      <div className="cwin-head" title="Trascina per spostare la finestra" onMouseDown={(e) => grab(e, 'move')}>
+      <div className="cwin-head" title={t('console.dragToMove')} onMouseDown={(e) => grab(e, 'move')}>
         <span className="cwin-drag"><Ui name="console" size={14} /></span>
         {items.length === 1 ? (
           <span className="cwin-title grow">{items[0].node}</span>
@@ -349,13 +356,13 @@ export function ConsoleWindows({ lab, items, kindOf, onClose }) {
             {items.map((it) => (
               <div key={it.id} className={`tab ${it.id === active ? 'on' : ''}`} title={it.node} onMouseDown={(e) => { e.stopPropagation(); setActive(it.id) }}>
                 <span className="grow">{it.node}</span>
-                <button className="x" title="Chiudi scheda" onMouseDown={(e) => e.stopPropagation()} onClick={() => onClose(it.id)}>×</button>
+                <button className="x" title={t('console.closeTab')} onMouseDown={(e) => e.stopPropagation()} onClick={() => onClose(it.id)}>×</button>
               </div>
             ))}
           </div>
         )}
-        <button className="cwin-btn" title="Riduci a icona" onMouseDown={(e) => e.stopPropagation()} onClick={() => upd({ min: true })}><Ui name="minus" size={14} /></button>
-        <button className="cwin-btn" title={items.length > 1 ? 'Chiudi tutte le consolle' : 'Chiudi'} onMouseDown={(e) => e.stopPropagation()} onClick={() => items.forEach((it) => onClose(it.id))}><Ui name="close" size={14} /></button>
+        <button className="cwin-btn" title={t('console.minimize')} onMouseDown={(e) => e.stopPropagation()} onClick={() => upd({ min: true })}><Ui name="minus" size={14} /></button>
+        <button className="cwin-btn" title={items.length > 1 ? t('console.closeAll') : t('common.close')} onMouseDown={(e) => e.stopPropagation()} onClick={() => items.forEach((it) => onClose(it.id))}><Ui name="close" size={14} /></button>
       </div>
       <div className="cwin-body">
         {items.map((it) => <Console key={it.id} lab={lab} node={it.node} visible={it.id === active} kind={kindOf(it.node)} />)}
@@ -366,6 +373,7 @@ export function ConsoleWindows({ lab, items, kindOf, onClose }) {
 }
 
 function TextConsole({ lab, node, visible }) {
+  useLang()
   const host = useRef(null)
   const fitRef = useRef(null)
 
@@ -381,7 +389,7 @@ function TextConsole({ lab, node, visible }) {
     term.loadAddon(fit)
     term.open(host.current)
     fitRef.current = fit
-    term.writeln(`\x1b[36mConnessione a ${node}...\x1b[0m`)
+    term.writeln(`\x1b[36m${t('console.connectingTo', { node })}\x1b[0m`)
 
     const ws = new WebSocket(consoleUrl(lab, node))
     const sendSize = () => {
@@ -390,7 +398,7 @@ function TextConsole({ lab, node, visible }) {
     }
     ws.onopen = () => { sendSize(); term.focus() }
     ws.onmessage = (e) => term.write(e.data)
-    ws.onclose = () => term.writeln('\r\n\x1b[90m[disconnesso]\x1b[0m')
+    ws.onclose = () => term.writeln(`\r\n\x1b[90m${t('console.disconnected')}\x1b[0m`)
     const sub = term.onData((d) => ws.readyState === 1 && ws.send(JSON.stringify({ t: 'i', d })))
     const ro = new ResizeObserver(sendSize)
     ro.observe(host.current)
@@ -411,13 +419,14 @@ export const POPUP_KINDS = ['vnc', 'spice', 'rdp', 'rdp-tls']
 
 // stand-alone console window (popup) opened from a lab: #/console/<lab>/<node>
 export function ConsolePage({ lab, node }) {
+  useLang()
   const [kind, setKind] = useState(null)
   const [err, setErr] = useState('')
   useEffect(() => {
     document.title = `${node} · ${lab}`
     api(`/labs/${encodeURIComponent(lab)}`).then((r) => {
       const ns = r.state?.nodes?.[node]
-      ns?.status === 'running' ? setKind(consoleKind(ns)) : setErr(`${node} non è acceso`)
+      ns?.status === 'running' ? setKind(consoleKind(ns)) : setErr(t('console.notPoweredOn', { node }))
     }).catch((e) => setErr(e.message))
   }, [lab, node])
   return (

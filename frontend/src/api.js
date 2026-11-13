@@ -1,4 +1,6 @@
 // Minimal API client. The login session token is kept in localStorage.
+import { getLang, t } from './i18n.js'
+
 const KEY = 'netso.token'
 
 export const getToken = () => {
@@ -18,7 +20,7 @@ export async function api(path, { method = 'GET', body, text = false, noAuth = f
   const res = await fetch(`/api${path}`, {
     method, headers, body: body !== undefined ? JSON.stringify(body) : undefined,
   })
-  if (res.status === 401 && !noAuth) throw new AuthError('Accesso richiesto')
+  if (res.status === 401 && !noAuth) throw new AuthError('Login required')
   if (!res.ok) {
     let msg = res.statusText
     try { msg = (await res.json()).detail || msg } catch { /* not json */ }
@@ -45,15 +47,15 @@ export function uploadTo(url, file, onProgress = () => {}) {
   return new Promise((resolve, reject) => {
     const x = new XMLHttpRequest()
     x.open('PUT', url)
-    const t = getToken()
-    if (t) x.setRequestHeader('Authorization', `Bearer ${t}`)
+    const tok = getToken()
+    if (tok) x.setRequestHeader('Authorization', `Bearer ${tok}`)
     x.upload.onprogress = (e) => e.lengthComputable && onProgress(e.loaded / e.total)
     x.onload = () => {
       let body = {}
       try { body = JSON.parse(x.responseText) } catch { /* not json */ }
       x.status < 300 ? resolve(body) : reject(new Error(body.detail || x.statusText))
     }
-    x.onerror = () => reject(new Error('Caricamento interrotto'))
+    x.onerror = () => reject(new Error(t('common.uploadAborted')))
     x.send(file)
   })
 }
@@ -74,8 +76,8 @@ export const CONSOLES = [['telnet', 'TELNET'], ['rdp', 'RDP'], ['rdp-tls', 'RDP-
 export const consoleLabel = (c) => (CONSOLES.find((x) => x[0] === c) || [c, (c || '').toUpperCase()])[1]
 
 // display name of a device (PNETLab style: "Cisco vIOS Router"); old imports kept it in the description
-export const tplTitle = (t) => (!t ? '' : t.title || (t.source === 'EVE-NG/PNETLab' && t.description && !t.description.startsWith('Importato') ? t.description.replace(/ \(importato da EVE-NG\/PNETLab\)$/, '') : t.name))
-export const byTitle = (a, b) => tplTitle(a).localeCompare(tplTitle(b), 'it', { sensitivity: 'base' })
+export const tplTitle = (tpl) => (!tpl ? '' : tpl.title || (tpl.source === 'EVE-NG/PNETLab' && tpl.description && !tpl.description.startsWith('Importato') ? tpl.description.replace(/ \(importato da EVE-NG\/PNETLab\)$/, '') : tpl.name))
+export const byTitle = (a, b) => tplTitle(a).localeCompare(tplTitle(b), getLang(), { sensitivity: 'base' })
 
 // Interface names for a node, same rules as the backend
 export function interfaceNames(tpl, node) {
