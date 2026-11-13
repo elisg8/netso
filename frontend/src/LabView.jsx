@@ -9,7 +9,7 @@ import { THEMES, isLight, setTheme, useTheme } from './theme.js'
 import Console, { ConsoleWindows, POPUP_KINDS, consoleKind, openConsoleWindow } from './Console.jsx'
 import { WiresharkWindows } from './Wireshark.jsx'
 import { EXPORT_FORMATS, SnapshotsDialog, downloadExport } from './Interop.jsx'
-import { GenerateDialog, InventoryDialog, SaveConfigsDialog, autoLayout } from './Automation.jsx'
+import { GenerateDialog, InventoryDialog, SaveConfigsDialog, autoLayout, waitJob } from './Automation.jsx'
 
 const PREFIX = { router: 'r', switch: 'sw', l3switch: 'sw', bridge: 'br', firewall: 'fw', server: 'srv', host: 'pc', container: 'ct', cloud: 'net' }
 const KINDS = ['qemu', 'dynamips', 'iol', 'docker', 'bridge', 'external', 'nat', 'vxlan']
@@ -355,6 +355,7 @@ function Editor({ name, templates, onError, onBack, onReloadTemplates }) {
   const [capDlg, setCapDlg] = useState(null) // {node?, iface?} packet capture window
   const [extHelpSeen, setExtHelpSeen] = usePref('netso.extConsoleHelpSeen', false)
   const [showExtHelp, setShowExtHelp] = useState(false)
+  const [pulls, setPulls] = useState([]) // immagini Docker in scaricamento dal lab [{id, ref, status, message}]
   const [caps, setCaps] = useState([]) // packet captures of this lab
   const [wsWins, setWsWins] = useState([]) // in-browser Wireshark windows [{session, peer, min}]
   const [wsSessions, setWsSessions] = useState([]) // Wireshark sessions running on the server (any tab)
@@ -798,6 +799,23 @@ function Editor({ name, templates, onError, onBack, onReloadTemplates }) {
     if (terminals.length && !extHelpSeen) setShowExtHelp(true)
   }
 
+  // scarica l'immagine Docker di un nodo container direttamente dal lab (job con avanzamento)
+  const nodeImage = (n) => { const x = lab.nodes.find((y) => y.name === n); return x?.image || tplOf(n)?.image }
+  const needsImage = (n) => { const t = tplOf(n); return t?.kind === 'docker' && t.ready === false }
+  const pullImage = async (ref) => {
+    if (!ref || pulls.some((p) => p.ref === ref && p.status === 'running')) return
+    const pid = cid()
+    setPulls((p) => [...p, { id: pid, ref, status: 'running', message: 'Avvio…' }])
+    try {
+      const { job } = await api('/images/docker/pull', { method: 'POST', body: { ref } })
+      const j = await waitJob(job, (t) => setPulls((p) => p.map((x) => (x.id === pid ? { ...x, message: t.message || 'In corso…' } : x))))
+      setPulls((p) => p.map((x) => (x.id === pid ? { ...x, status: j.status, message: j.status === 'done' ? 'Scaricata' : (j.error || j.message || 'Errore') } : x)))
+      if (j.status === 'done') { onReloadTemplates?.(); load() }
+      setTimeout(() => setPulls((p) => p.filter((x) => x.id !== pid)), 5000)
+    } catch (e) { onError(e); setPulls((p) => p.filter((x) => x.id !== pid)) }
+  }
+  const pullMissing = () => [...new Set(lab.nodes.map((n) => n.name).filter(needsImage).map(nodeImage))].forEach((r) => r && pullImage(r))
+
   // ---- Wireshark in the browser
   const peerOf = (ep) => { const l = lab.links.find((x) => x.endpoints.includes(ep)); return l && l.endpoints.find((e) => e !== ep).replace(':', ' ') }
   const showWs = (session, peer) => setWsWins((ws) => [...ws.map((w) => ({ ...w, min: true })).filter((w) => w.session.id !== session.id), { session, peer, min: false }])
@@ -894,6 +912,7 @@ function Editor({ name, templates, onError, onBack, onReloadTemplates }) {
             { icon: 'info', label: 'Ellisse', onClick: () => addDrawing('ellipse', { x: menu.pos.x + 43, y: menu.pos.y + 29 }) },
           ] },
           { sep: true },
+          lab.nodes.some((n) => needsImage(n.name)) && { icon: 'download', label: `Scarica immagini mancanti (${new Set(lab.nodes.map((n) => n.name).filter(needsImage).map(nodeImage)).size})`, onClick: pullMissing },
           { icon: 'play', label: 'Nodi', sub: [
             { icon: 'play', label: 'Avvia tutti', onClick: () => bulk(allNames, 'start') },
             { icon: 'stop', label: 'Ferma tutti', onClick: () => bulk(allNames, 'stop') },
@@ -940,6 +959,7 @@ function Editor({ name, templates, onError, onBack, onReloadTemplates }) {
           isVm(tpl) && { icon: 'stop', label: 'Ferma', cls: 'stop', disabled: !up || !!pending[n], onClick: () => nodeAction(n, 'stop') },
           isVm(tpl) && { icon: 'console', label: 'Consolle', disabled: !canDo(tpl, ns, 'console'), onClick: () => openConsole(n) },
           isVm(tpl) && up && (termTarget(ns, tpl) || nativeConsole(ns)) && { icon: 'expand', label: termTarget(ns, tpl) ? 'Consolle nel terminale del PC' : `Consolle esterna (${nativeConsole(ns).app})`, onClick: () => openNative([n]) },
+          needsImage(n) && { icon: 'download', label: 'Scarica immagine Docker', disabled: pulls.some((p) => p.ref === nodeImage(n) && p.status === 'running'), onClick: () => pullImage(nodeImage(n)) },
           hasDisks(tpl) && { icon: 'wipe', label: 'Azzera dischi (wipe)', disabled: !canDo(tpl, ns, 'wipe'), onClick: () => nodeAction(n, 'wipe') },
           isVm(tpl) && { sep: true },
           { icon: node.pinned ? 'unlock' : 'lock', label: node.pinned ? 'Sblocca posizione' : 'Blocca posizione', disabled: locked,
@@ -1236,6 +1256,9 @@ function Editor({ name, templates, onError, onBack, onReloadTemplates }) {
                 onEditConfig={() => setCfgDlg({ node: selNode.name })}
                 onDelete={() => removeNodes([selNode.name])}
                 onEdit={() => setEditNode(selNode.name)}
+                needsImage={needsImage(selNode.name)}
+                pulling={pulls.some((p) => p.ref === nodeImage(selNode.name) && p.status === 'running')}
+                onPullImage={() => pullImage(nodeImage(selNode.name))}
                 canEdit={!locked} running={running} onApply={applyConditioning}
               />
             ) : (
@@ -1301,6 +1324,17 @@ function Editor({ name, templates, onError, onBack, onReloadTemplates }) {
       )}
       {consoles.length > 0 && consoleMode === 'window' && (
         <ConsoleWindows lab={name} items={consoles} kindOf={(node) => consoleKind(state?.nodes?.[node])} onClose={closeConsole} />
+      )}
+
+      {pulls.length > 0 && (
+        <div className="pull-pills">
+          {pulls.map((p) => (
+            <div key={p.id} className={`pull-pill ${p.status}`}>
+              {p.status === 'running' ? <span className="spin" /> : <Ui name={p.status === 'done' ? 'select' : 'destroy'} size={13} />}
+              <span className="grow small"><b>{p.ref}</b> — {p.message}</span>
+            </div>
+          ))}
+        </div>
       )}
 
       {editNode && lab.nodes.some((n) => n.name === editNode) && (
@@ -2561,7 +2595,7 @@ function NodeEditDialog({ node, tpl, ns, lab, locked, running, configSet, onClos
   )
 }
 
-function NodePanel({ node, tpl, ns, lab, locked, onChange, onRename, onAction, onConsole, onDelete, configSet, onEnableConfig, onEditConfig, onEdit, canEdit, running, onApply }) {
+function NodePanel({ node, tpl, ns, lab, locked, onChange, onRename, onAction, onConsole, onDelete, configSet, onEnableConfig, onEditConfig, onEdit, canEdit, running, onApply, needsImage, pulling, onPullImage }) {
   const [nameDraft, setNameDraft] = useState(node.name)
   const status = ns?.status || 'stopped'
   const host = location.hostname
@@ -2579,6 +2613,14 @@ function NodePanel({ node, tpl, ns, lab, locked, onChange, onRename, onAction, o
       </div>
       <div className={`status-line ${status}`}><span className={`dot ${status}`} />{status === 'running' ? 'In esecuzione' : status === 'error' ? 'Errore' : 'Fermo'}</div>
       {ns?.error && <div className="warning err small">{ns.error}</div>}
+      {needsImage && (
+        <div className="warning small img-missing">
+          <span>Immagine Docker non presente sul server{tpl?.image ? <>: <code>{tpl.image}</code></> : ''}.</span>
+          <button className="primary" disabled={pulling} onClick={onPullImage}>
+            {pulling ? <><span className="spin" /> Scarico…</> : <><Ui name="download" size={14} /> Scarica immagine</>}
+          </button>
+        </div>
+      )}
 
       {isVm(tpl) && (
         <div className="actions">
