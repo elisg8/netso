@@ -61,6 +61,7 @@ export const en = {
   'labview.node.plugHint': 'Drag onto another node to connect it',
   // edge
   'labview.edge.capture': '● capture',
+  'labview.edge.raiseLabel': 'Click to bring it to the front',
   'labview.allVlans': 'all',
   // action busy labels
   'labview.action.start': 'Starting',
@@ -525,6 +526,7 @@ export const it = {
   'labview.startupConfigDots': 'Startup config…',
   'labview.node.plugHint': 'Trascina su un altro nodo per collegarlo',
   'labview.edge.capture': '● cattura',
+  'labview.edge.raiseLabel': 'Clicca per portarla in primo piano',
   'labview.allVlans': 'tutte',
   'labview.action.start': 'Avvio',
   'labview.action.stop': 'Arresto',

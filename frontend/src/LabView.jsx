@@ -113,6 +113,7 @@ function TbBtn({ title, icon, onClick, cls = '', disabled }) {
 
 // unique id for a console instance (several consoles can be open for the same node)
 const cid = () => 'c' + Math.random().toString(36).slice(2, 9)
+let topLabelZ = 10  // click an interface label to bring it above the others (overlapping parallel links)
 
 // ------------------------------------------------------------ drawings (annotations)
 export const ANN = 'ann:'
@@ -231,6 +232,7 @@ function CenterEdge({ id, source, target, data, selected, interactionWidth }) {
   const s = useInternalNode(source)
   const tgt = useInternalNode(target)
   const [hv, setHv] = useState(false)
+  const [labelZ, setLabelZ] = useState({})  // per interface label: a raised z-index after a click
   if (!s || !tgt) return null
   const half = (n) => CHIP_HALF * (n.data?.size || 100) / 100
   const c = (n) => [n.internals.positionAbsolute.x + (n.measured?.width || 0) / 2, n.internals.positionAbsolute.y + half(n)]
@@ -296,7 +298,9 @@ function CenterEdge({ id, source, target, data, selected, interactionWidth }) {
       <EdgeLabelRenderer>
         {showIface && ifaceLabels.map(([x, y, txt], i) => (
           <div key={i} className={`elabel iface ${selected ? 'sel' : ''}`}
-            style={{ transform: `translate(-50%,-50%) translate(${x}px,${y}px)` }}>{txt}</div>
+            title={t('labview.edge.raiseLabel')}
+            onMouseDown={(e) => { e.stopPropagation(); setLabelZ((m) => ({ ...m, [i]: ++topLabelZ })) }}
+            style={{ transform: `translate(-50%,-50%) translate(${x}px,${y}px)`, zIndex: labelZ[i], pointerEvents: 'auto', cursor: 'pointer' }}>{txt}</div>
         ))}
         {extra.map(([cls, txt], i) => (
           <div key={cls} className={`elabel ${cls}`} style={{
