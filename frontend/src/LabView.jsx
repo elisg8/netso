@@ -1329,7 +1329,8 @@ function Editor({ name, templates, onError, onBack, onReloadTemplates }) {
         </section>
       )}
       {consoles.length > 0 && consoleMode === 'window' && (
-        <ConsoleWindows lab={name} items={consoles} kindOf={(node) => consoleKind(state?.nodes?.[node])} onClose={closeConsole} />
+        <ConsoleWindows lab={name} items={consoles} kindOf={(node) => consoleKind(state?.nodes?.[node])} onClose={closeConsole}
+          onReorder={(ids) => setConsoles((c) => ids.map((id) => c.find((x) => x.id === id)).filter(Boolean))} />
       )}
 
       {pulls.length > 0 && (

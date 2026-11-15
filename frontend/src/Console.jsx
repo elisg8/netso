@@ -315,10 +315,13 @@ export default function Console({ lab, node, visible, kind }) {
 // EVE-NG style: each console as its own window, floating over the canvas — drag the bar, resize the corner.
 // one movable/resizable window holding every open console as a tab; switching a tab keeps the
 // others connected in the background, and a newly opened console comes up focused
-export function ConsoleWindows({ lab, items, kindOf, onClose }) {
+export function ConsoleWindows({ lab, items, kindOf, onClose, onReorder }) {
   useLang()
   const [win, setWin] = useState({ x: 90, y: 72, w: 720, h: 460, min: false })
+  const [restore, setRestore] = useState(null) // saved geometry while maximized (null = normal size)
   const [active, setActive] = useState(null)
+  const [dragTab, setDragTab] = useState(null)  // id of the tab being dragged to reorder
+  const [overTab, setOverTab] = useState(null)   // id of the tab it is hovering over
   const seen = useRef(new Set())
   useEffect(() => {
     const ids = items.map((it) => it.id)
@@ -328,7 +331,19 @@ export function ConsoleWindows({ lab, items, kindOf, onClose }) {
     if (fresh.length) setWin((w) => (w.min ? { ...w, min: false } : w))  // a new console reopens the minimized window
   }, [items])
   const upd = (patch) => setWin((w) => ({ ...w, ...patch }))
+  // a maximized window fills the viewport (minus the top toolbar) and tracks resizes
+  const maxGeom = () => ({ x: 12, y: 54, w: Math.max(360, innerWidth - 24), h: Math.max(220, innerHeight - 66) })
+  useEffect(() => {
+    if (!restore) return
+    const onR = () => setWin((w) => ({ ...w, ...maxGeom() }))
+    addEventListener('resize', onR); return () => removeEventListener('resize', onR)
+  }, [restore])
+  const toggleMax = () => {
+    if (restore) { setWin((w) => ({ ...w, ...restore })); setRestore(null) }
+    else { setRestore({ x: win.x, y: win.y, w: win.w, h: win.h }); setWin((w) => ({ ...w, ...maxGeom() })) }
+  }
   const grab = (e, mode) => {
+    if (restore) return // not while maximized
     e.preventDefault()
     const b = { ...win }, sx = e.clientX, sy = e.clientY
     const move = (ev) => {
@@ -339,6 +354,17 @@ export function ConsoleWindows({ lab, items, kindOf, onClose }) {
     const up = () => { removeEventListener('mousemove', move); removeEventListener('mouseup', up) }
     addEventListener('mousemove', move); addEventListener('mouseup', up)
   }
+  // drag a tab onto another to reorder them (persisted through the parent's console list)
+  // the source id comes from the drop event (reliable even on a fast drag), not from React state which may lag
+  const dropTab = (fromId, toId) => {
+    setDragTab(null); setOverTab(null)
+    if (!onReorder || !fromId || fromId === toId) return
+    const ids = items.map((it) => it.id)
+    const from = ids.indexOf(fromId), to = ids.indexOf(toId)
+    if (from < 0 || to < 0) return
+    ids.splice(to, 0, ids.splice(from, 1)[0])
+    onReorder(ids)
+  }
   if (!items.length) return null
   if (win.min) return (
     <div className="cwin-pills">
@@ -346,28 +372,37 @@ export function ConsoleWindows({ lab, items, kindOf, onClose }) {
     </div>
   )
   return (
-    <div className="cwin" style={{ left: win.x, top: win.y, width: win.w, height: win.h, zIndex: 40 }}>
-      <div className="cwin-head" title={t('console.dragToMove')} onMouseDown={(e) => grab(e, 'move')}>
-        <span className="cwin-drag"><Ui name="console" size={14} /></span>
+    <div className={`cwin ${restore ? 'max' : ''}`} style={{ left: win.x, top: win.y, width: win.w, height: win.h, zIndex: 40 }}>
+      <div className="cwin-head" title={t('console.dragToMove')} onMouseDown={(e) => grab(e, 'move')} onDoubleClick={toggleMax}>
+        <span className="cwin-drag" title={t('console.dragToMove')}><Ui name="drag" size={14} /></span>
         {items.length === 1 ? (
-          <span className="cwin-title grow">{items[0].node}</span>
+          <span className="cwin-title">{items[0].node}</span>
         ) : (
           <div className="cwin-tabs">
             {items.map((it) => (
-              <div key={it.id} className={`tab ${it.id === active ? 'on' : ''}`} title={it.node} onMouseDown={(e) => { e.stopPropagation(); setActive(it.id) }}>
+              <div key={it.id}
+                className={`tab ${it.id === active ? 'on' : ''} ${it.id === dragTab ? 'dragging' : ''} ${it.id === overTab && dragTab && it.id !== dragTab ? 'over' : ''}`}
+                title={it.node} draggable
+                onMouseDown={(e) => { e.stopPropagation(); setActive(it.id) }}
+                onDragStart={(e) => { setDragTab(it.id); e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', it.id) } catch { /* ignore */ } }}
+                onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; if (it.id !== overTab) setOverTab(it.id) }}
+                onDrop={(e) => { e.preventDefault(); dropTab(e.dataTransfer.getData('text/plain') || dragTab, it.id) }}
+                onDragEnd={() => { setDragTab(null); setOverTab(null) }}>
                 <span className="grow">{it.node}</span>
-                <button className="x" title={t('console.closeTab')} onMouseDown={(e) => e.stopPropagation()} onClick={() => onClose(it.id)}>×</button>
+                <button className="x" title={t('console.closeTab')} onMouseDown={(e) => e.stopPropagation()} onClick={() => onClose(it.id)}><Ui name="close" size={11} /></button>
               </div>
             ))}
           </div>
         )}
+        <span className="cwin-spacer" />
+        <button className="cwin-btn" title={restore ? t('console.restore') : t('console.maximize')} onMouseDown={(e) => e.stopPropagation()} onClick={toggleMax}><Ui name={restore ? 'fit' : 'expand'} size={14} /></button>
         <button className="cwin-btn" title={t('console.minimize')} onMouseDown={(e) => e.stopPropagation()} onClick={() => upd({ min: true })}><Ui name="minus" size={14} /></button>
-        <button className="cwin-btn" title={items.length > 1 ? t('console.closeAll') : t('common.close')} onMouseDown={(e) => e.stopPropagation()} onClick={() => items.forEach((it) => onClose(it.id))}><Ui name="close" size={14} /></button>
+        <button className="cwin-btn danger" title={items.length > 1 ? t('console.closeAll') : t('common.close')} onMouseDown={(e) => e.stopPropagation()} onClick={() => items.forEach((it) => onClose(it.id))}><Ui name="close" size={14} /></button>
       </div>
       <div className="cwin-body">
         {items.map((it) => <Console key={it.id} lab={lab} node={it.node} visible={it.id === active} kind={kindOf(it.node)} />)}
       </div>
-      <div className="cwin-grip" title="Ridimensiona" onMouseDown={(e) => grab(e, 'resize')} />
+      {!restore && <div className="cwin-grip" title={t('console.resize')} onMouseDown={(e) => grab(e, 'resize')} />}
     </div>
   )
 }

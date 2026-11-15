@@ -358,6 +358,8 @@ const ui = {
   lang: <><circle cx="12" cy="12" r="9" /><path d="M3 12h18M12 3c2.5 2.5 2.5 15 0 18M12 3c-2.5 2.5-2.5 15 0 18M4.5 7h15M4.5 17h15" /></>,
   hand: <path d="M8.5 11V5.4a1.3 1.3 0 0 1 2.6 0V10m0-.6V4.2a1.3 1.3 0 0 1 2.6 0V10m0-.4V5.1a1.3 1.3 0 0 1 2.6 0V11m0-2.4a1.3 1.3 0 0 1 2.6 0V13a6 6 0 0 1-6 6h-1a6 6 0 0 1-4.3-1.8l-3-3a1.4 1.4 0 0 1 2-2l1.3 1.3" />,
   expand: <path d="M4 9V5a1 1 0 0 1 1-1h4M20 9V5a1 1 0 0 0-1-1h-4M4 15v4a1 1 0 0 0 1 1h4M20 15v4a1 1 0 0 1-1 1h-4" />,
+  // drag: six-dot grip handle
+  drag: <>{[6, 12, 18].flatMap((cy) => [9, 15].map((cx) => <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r="1.25" fill="currentColor" stroke="none" />))}</>,
   // nerd: face with big round glasses and a little smile
   nerd: <><FC cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="9" />
     <circle cx="8.6" cy="10.8" r="2.6" /><circle cx="15.4" cy="10.8" r="2.6" />

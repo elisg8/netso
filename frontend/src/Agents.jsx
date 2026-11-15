@@ -6,13 +6,33 @@ import { t, useLang } from './i18n.js'
 import { Ui } from './icons.jsx'
 import { ModalHead } from './LabView.jsx'
 
+// keep the floating button inside the current window (a spot saved on a bigger window must not fall off a smaller one)
+const FAB_SIZE = 48
+const clampFab = (p) => p && {
+  x: Math.max(8, Math.min(p.x, window.innerWidth - FAB_SIZE - 8)),
+  y: Math.max(8, Math.min(p.y, window.innerHeight - FAB_SIZE - 8)),
+}
+
 export function AgentFab({ lab }) {
   useLang()
   const [open, setOpen] = useState(false)
   const [pos, setPos] = useState(() => {
-    try { const s = JSON.parse(localStorage.getItem('netso.agentFab') || 'null'); if (s && typeof s.x === 'number') return s } catch { /* ignore */ }
+    try { const s = JSON.parse(localStorage.getItem('netso.agentFab') || 'null'); if (s && typeof s.x === 'number') return clampFab(s) } catch { /* ignore */ }
     return null // null = default spot from CSS (bottom-right)
   })
+  // if the saved spot ends up off-screen (window shrank, display changed), pull it back in so it never disappears
+  useEffect(() => {
+    const fix = () => setPos((p) => {
+      if (!p) return p
+      const c = clampFab(p)
+      if (c.x === p.x && c.y === p.y) return p
+      try { localStorage.setItem('netso.agentFab', JSON.stringify(c)) } catch { /* ignore */ }
+      return c
+    })
+    fix()
+    addEventListener('resize', fix)
+    return () => removeEventListener('resize', fix)
+  }, [])
   // drag to move it anywhere (so it never covers a button); a plain click still opens the chat
   const onDown = (e) => {
     if (e.button !== 0) return
