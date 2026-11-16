@@ -65,14 +65,18 @@ export function AgentFab({ lab }) {
 function ChatPanel({ lab, onClose }) {
   useLang()
   const chatKey = `netso.chat.${lab || '_'}`
+  // context/live prefs are PER-LAB: inside a lab both default ON; opening the chat from Home (no lab)
+  // must not poison a global flag that then keeps every lab stuck on «generic».
+  const ctxKey = lab ? `netso.chat.ctx.${lab}` : null
+  const liveKey = lab ? `netso.chat.live.${lab}` : null
   const readPref = (k, d) => { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v) } catch { return d } }
   const [agents, setAgents] = useState([])
   const [agent, setAgent] = useState(() => readPref('netso.chat.agent', ''))
   // {role:'user'|'assistant', text, transcript?} — kept in localStorage so the chat survives a refresh/close
   const [messages, setMessages] = useState(() => readPref(chatKey, []))
   const [input, setInput] = useState('')
-  const [useCtx, setUseCtx] = useState(() => readPref('netso.chat.ctx', !!lab))
-  const [live, setLive] = useState(() => readPref('netso.chat.live', !!lab))   // default ON when a lab is open
+  const [useCtx, setUseCtx] = useState(() => lab ? readPref(`netso.chat.ctx.${lab}`, true) : false)
+  const [live, setLive] = useState(() => lab ? readPref(`netso.chat.live.${lab}`, true) : false)   // default ON in a lab
   const [node, setNode] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState(null)
@@ -84,8 +88,8 @@ function ChatPanel({ lab, onClose }) {
   useEffect(() => { scroll.current?.scrollTo({ top: scroll.current.scrollHeight, behavior: 'smooth' }) }, [messages, busy])
   // remember the chat and the choices across refresh/close
   useEffect(() => { try { localStorage.setItem(chatKey, JSON.stringify(messages.slice(-40))) } catch { /* ignore */ } }, [messages, chatKey])
-  useEffect(() => { try { localStorage.setItem('netso.chat.live', JSON.stringify(live)) } catch { /* ignore */ } }, [live])
-  useEffect(() => { try { localStorage.setItem('netso.chat.ctx', JSON.stringify(useCtx)) } catch { /* ignore */ } }, [useCtx])
+  useEffect(() => { if (liveKey) try { localStorage.setItem(liveKey, JSON.stringify(live)) } catch { /* ignore */ } }, [live, liveKey])
+  useEffect(() => { if (ctxKey) try { localStorage.setItem(ctxKey, JSON.stringify(useCtx)) } catch { /* ignore */ } }, [useCtx, ctxKey])
   useEffect(() => { if (agent) try { localStorage.setItem('netso.chat.agent', JSON.stringify(agent)) } catch { /* ignore */ } }, [agent])
   const curAgent = agents.find((a) => a.id === agent)
 
