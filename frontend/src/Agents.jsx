@@ -52,17 +52,33 @@ export function AgentFab({ lab }) {
     addEventListener('mousemove', move); addEventListener('mouseup', up)
   }
   const style = pos ? { left: pos.x, top: pos.y, right: 'auto', bottom: 'auto' } : undefined
+  // the FAB's current top-left, so the chat opens anchored to the icon wherever it was dragged
+  const anchor = pos || { x: window.innerWidth - FAB_SIZE - 20, y: window.innerHeight - FAB_SIZE - 20 }
   return (
     <>
       <button className={`agent-fab ${open ? 'on' : ''}`} title={t('agents.fabTitle')} style={style} onMouseDown={onDown}>
         <Ui name="nerd" size={24} />
       </button>
-      {open && <ChatPanel lab={lab} onClose={() => setOpen(false)} />}
+      {open && <ChatPanel lab={lab} anchor={anchor} onClose={() => setOpen(false)} />}
     </>
   )
 }
 
-function ChatPanel({ lab, onClose }) {
+// place the chat anchored to the icon: above-left of it, pulled back onto the screen if it would overflow
+const PANEL_W = 404
+const panelSpot = (anchor) => {
+  const w = Math.min(PANEL_W, window.innerWidth - 16)
+  const h = Math.min(window.innerHeight * 0.72, 740)
+  const gap = 12
+  let x = anchor.x + FAB_SIZE - w            // align the panel's right edge with the icon's
+  let y = anchor.y - gap - h                 // float above the icon
+  if (y < 8) y = Math.min(anchor.y + FAB_SIZE + gap, window.innerHeight - h - 8)  // no room above -> below
+  x = Math.max(8, Math.min(x, window.innerWidth - w - 8))
+  y = Math.max(8, Math.min(y, window.innerHeight - h - 8))
+  return { x, y }
+}
+
+function ChatPanel({ lab, anchor, onClose }) {
   useLang()
   const chatKey = `netso.chat.${lab || '_'}`
   // context/live prefs are PER-LAB: inside a lab both default ON; opening the chat from Home (no lab)
@@ -82,7 +98,23 @@ function ChatPanel({ lab, onClose }) {
   const [err, setErr] = useState(null)
   const [cfgOpen, setCfgOpen] = useState(false)
   const [applied, setApplied] = useState({})   // `${msg}:${proposal}` -> {busy|done|error|output|backup}
+  const [pos, setPos] = useState(() => panelSpot(anchor))   // floating, anchored to the icon; drag to move
   const scroll = useRef(null)
+  // keep the floating window on screen if the viewport shrinks
+  useEffect(() => {
+    const fix = () => setPos((p) => ({ x: Math.max(8, Math.min(p.x, innerWidth - 320)), y: Math.max(8, Math.min(p.y, innerHeight - 120)) }))
+    addEventListener('resize', fix)
+    return () => removeEventListener('resize', fix)
+  }, [])
+  // drag the whole chat by its header (but not when clicking the header's buttons)
+  const onHeadDown = (e) => {
+    if (e.button !== 0 || e.target.closest('button')) return
+    e.preventDefault()
+    const sx = e.clientX - pos.x, sy = e.clientY - pos.y
+    const move = (ev) => setPos({ x: Math.max(8, Math.min(ev.clientX - sx, innerWidth - 60)), y: Math.max(8, Math.min(ev.clientY - sy, innerHeight - 48)) })
+    const up = () => { removeEventListener('mousemove', move); removeEventListener('mouseup', up) }
+    addEventListener('mousemove', move); addEventListener('mouseup', up)
+  }
   useEffect(() => { api('/agents').then((d) => setAgents(d.agents.filter((a) => a.enabled))).catch((e) => setErr(e.message)) }, [])
   useEffect(() => { if (agents.length && !agents.some((a) => a.id === agent)) setAgent(agents[0].id) }, [agents, agent])
   useEffect(() => { scroll.current?.scrollTo({ top: scroll.current.scrollHeight, behavior: 'smooth' }) }, [messages, busy])
@@ -118,8 +150,8 @@ function ChatPanel({ lab, onClose }) {
   }
 
   return (
-    <div className="agent-panel chat">
-      <div className="agent-head">
+    <div className="agent-panel chat" style={{ left: pos.x, top: pos.y, right: 'auto', bottom: 'auto' }}>
+      <div className="agent-head drag" onMouseDown={onHeadDown}>
         <Ui name="nerd" size={18} /><b className="grow">NetSO Assistant</b>
         {messages.length > 0 && <button className="icon-btn" title={t('agents.newConversation')} onClick={() => { setMessages([]); try { localStorage.removeItem(chatKey) } catch { /* ignore */ } }}><Ui name="refresh" size={15} /></button>}
         <button className="icon-btn" title={t('common.close')} onClick={onClose}><Ui name="close" size={15} /></button>

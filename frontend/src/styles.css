@@ -1166,6 +1166,8 @@ button.ghost-b { background: transparent; }
   max-height: min(78vh, 680px); display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line);
   border-radius: 14px; box-shadow: 0 16px 48px #0007; overflow: hidden; }
 .agent-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+.agent-head.drag { cursor: move; user-select: none; }
+.agent-head.drag button { cursor: pointer; }
 .agent-tabs { display: flex; gap: 4px; padding: 8px 8px 0; }
 .agent-tabs button { flex: 1; padding: 7px; border-radius: 8px 8px 0 0; background: transparent; color: var(--muted); border: none; font-size: 13px; }
 .agent-tabs button.on { background: var(--sunken); color: var(--fg, inherit); }

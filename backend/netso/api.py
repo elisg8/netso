@@ -562,10 +562,31 @@ _MAX_CMDS = 6
 _FAKE_STRONG = re.compile(r"(?mi)(example (output|command)|BGP neighbor is|Gateway of last resort|"
                           r"neighbor is .*remote AS|Established, up for|is directly connected)")
 _FAKE_SUGGEST = re.compile(r"(?mi)^\s*`?[A-Za-z0-9_.\-]+\s*[#>]\s*(show|ping|traceroute|sh\b)")
+# the model PUNTS: instead of running it refuses ("I can't connect to the devices") or hands the work
+# back to the user ("access the switches", "run the following commands"). In live mode this is wrong —
+# the nodes are powered on and it is the one that must query them — so force one real RUN round.
+_PUNT = re.compile(r"(?mi)("
+                   r"non\s+(posso|riesco|ho\s+(la\s+)?(capacit|modo|accesso)|sono\s+in\s+grado)\w*\s.*"
+                   r"(connett|accede|accedere|eseguire|interagire|verificar|dispositiv|nod)|"
+                   r"posso\s+(però\s+)?guidart|"
+                   r"accedi\s+(ai|al|alla|agli)\b|"
+                   r"tramite\s+(la\s+)?console\s+o\s+ssh|"
+                   r"esegui\s+(il\s+comando|i\s+seguenti)|"
+                   r"puoi\s+eseguire\b|"
+                   r"i\s+(can'?t|cannot|am\s+unable\s+to|do\s+not\s+have|don'?t\s+have)\b.*"
+                   r"(connect|access|reach|run|execute|interact|device|node)|"
+                   r"you\s+(can|should|could|need\s+to)\s+(run|access|log\s+in|connect)|"
+                   r"access\s+(the\s+)?(switch|device|node|router)|"
+                   r"run\s+the\s+following\s+command)")
 
 
 def _looks_fabricated(text: str) -> bool:
     return bool(_FAKE_STRONG.search(text) or (_FAKE_SUGGEST.search(text) and "```" in text))
+
+
+def _punts(text: str) -> bool:
+    """In live mode, did the model refuse / hand the work back instead of running the commands itself?"""
+    return bool(_PUNT.search(text))
 
 
 _FORCE_RUN = (
@@ -622,8 +643,9 @@ def ask_agent(aid: str, body: AskBody):
             reply = agents_mod.ask(aid, prompt, system=_ASSISTANT_SYSTEM + _LIVE_PROTOCOL + _CONFIG_PROTOCOL + _LIVE_ANSWER)
             runs = _RUN_RE.findall(reply)
             if not runs:
-                # answered without running: if it invented device output, force a real execution once
-                if not transcript and not forced and _looks_fabricated(reply):
+                # answered without running: if it invented device output OR punted ("I can't connect",
+                # "run these commands yourself"), force one real execution — the nodes are powered on
+                if not transcript and not forced and (_looks_fabricated(reply) or _punts(reply)):
                     forced, prompt = True, base + _FORCE_RUN
                     continue
                 clean, proposals = _extract_proposals(reply)
